@@ -19,37 +19,35 @@ import {
 } from "./reactQuery";
 
 export function useOpenCodeMode(): boolean {
-  const { settings } = useAppSettings();
-  return settings.sessionSource === "opencode";
+  return true;
 }
 
 export function useOpenCodeThreadSource(threadId?: ThreadId) {
   const { settings } = useAppSettings();
-  const enabled = settings.sessionSource === "opencode";
   const config = useMemo(() => buildOpenCodeServerConfigInput(settings), [settings]);
   const statusQuery = useQuery({
     ...opencodeStatusQueryOptions(config),
-    enabled,
+    enabled: true,
   });
   const projectsQuery = useQuery({
     ...opencodeProjectsQueryOptions(config),
-    enabled: enabled && statusQuery.data?.healthy === true,
+    enabled: statusQuery.data?.healthy === true,
   });
   const sessionsQuery = useQuery({
     ...opencodeSessionsQueryOptions({ ...config, roots: true, limit: 200 }),
-    enabled: enabled && statusQuery.data?.healthy === true,
+    enabled: statusQuery.data?.healthy === true,
   });
   const statusesQuery = useQuery({
     ...opencodeStatusesQueryOptions(config),
-    enabled: enabled && statusQuery.data?.healthy === true,
+    enabled: statusQuery.data?.healthy === true,
   });
   const sessionQuery = useQuery({
     ...opencodeSessionQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
-    enabled: enabled && statusQuery.data?.healthy === true && threadId !== undefined,
+    enabled: statusQuery.data?.healthy === true && threadId !== undefined,
   });
   const messagesQuery = useQuery({
     ...opencodeMessagesQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
-    enabled: enabled && statusQuery.data?.healthy === true && threadId !== undefined,
+    enabled: statusQuery.data?.healthy === true && threadId !== undefined,
     refetchInterval: () => {
       if (!threadId) {
         return false;
@@ -96,9 +94,8 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     threads,
     activeThread,
     threadsHydrated:
-      !enabled ||
-      (statusQuery.status === "success" &&
-        projectsQuery.status !== "pending" &&
-        sessionsQuery.status !== "pending"),
+      statusQuery.status === "success" &&
+      projectsQuery.status !== "pending" &&
+      sessionsQuery.status !== "pending",
   } as const;
 }

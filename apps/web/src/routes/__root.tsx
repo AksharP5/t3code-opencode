@@ -302,7 +302,6 @@ function EventRouter() {
     settings.opencodeAutoStart,
     settings.opencodePassword,
     settings.opencodeServerUrl,
-    settings.sessionSource,
     syncServerReadModel,
   ]);
 
