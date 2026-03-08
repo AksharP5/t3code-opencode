@@ -115,6 +115,27 @@ function hasUnseenCompletion(thread: Thread): boolean {
   return completedAt > lastVisitedAt;
 }
 
+function threadActivityTimestamp(thread: Thread): number {
+  const candidates = [
+    thread.session?.updatedAt,
+    thread.latestTurn?.completedAt,
+    thread.lastVisitedAt,
+    thread.createdAt,
+  ];
+
+  for (const value of candidates) {
+    if (!value) {
+      continue;
+    }
+    const timestamp = Date.parse(value);
+    if (!Number.isNaN(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  return 0;
+}
+
 function threadStatusPill(thread: Thread, hasPendingApprovals: boolean): ThreadStatusPill | null {
   if (hasPendingApprovals) {
     return {
@@ -313,6 +334,26 @@ export default function Sidebar() {
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
   const visibleProjects = isOpenCodeMode ? openCodeState.projects : projects;
   const visibleThreads = isOpenCodeMode ? openCodeState.threads : threads;
+  const sortedVisibleProjects = useMemo(() => {
+    const latestActivityByProjectId = new Map<ProjectId, number>();
+
+    for (const thread of visibleThreads) {
+      const timestamp = threadActivityTimestamp(thread);
+      const previous = latestActivityByProjectId.get(thread.projectId) ?? 0;
+      if (timestamp > previous) {
+        latestActivityByProjectId.set(thread.projectId, timestamp);
+      }
+    }
+
+    return visibleProjects.toSorted((left, right) => {
+      const byActivity =
+        (latestActivityByProjectId.get(right.id) ?? 0) - (latestActivityByProjectId.get(left.id) ?? 0);
+      if (byActivity !== 0) {
+        return byActivity;
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }, [visibleProjects, visibleThreads]);
   const pendingApprovalByThreadId = useMemo(() => {
     const map = new Map<ThreadId, boolean>();
     for (const thread of visibleThreads) {
@@ -321,8 +362,8 @@ export default function Sidebar() {
     return map;
   }, [visibleThreads]);
   const projectCwdById = useMemo(
-    () => new Map(visibleProjects.map((project) => [project.id, project.cwd] as const)),
-    [visibleProjects],
+    () => new Map(sortedVisibleProjects.map((project) => [project.id, project.cwd] as const)),
+    [sortedVisibleProjects],
   );
   const threadGitTargets = useMemo(
     () =>
@@ -494,7 +535,7 @@ export default function Sidebar() {
       const latestThread = visibleThreads
         .filter((thread) => thread.projectId === projectId)
         .toSorted((a, b) => {
-          const byDate = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          const byDate = threadActivityTimestamp(b) - threadActivityTimestamp(a);
           if (byDate !== 0) return byDate;
           return b.id.localeCompare(a.id);
         })[0];
@@ -901,16 +942,16 @@ export default function Sidebar() {
   );
 
   useEffect(() => {
-    if (!isOpenCodeMode || visibleProjects.length === 0) {
+    if (!isOpenCodeMode || sortedVisibleProjects.length === 0) {
       return;
     }
     setOpenCodeExpandedProjectIds((current) => {
       if (current.size > 0) {
         return current;
       }
-      return new Set(visibleProjects.map((project) => project.id));
+      return new Set(sortedVisibleProjects.map((project) => project.id));
     });
-  }, [isOpenCodeMode, visibleProjects]);
+  }, [isOpenCodeMode, sortedVisibleProjects]);
 
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
@@ -920,7 +961,7 @@ export default function Sidebar() {
       const activeDraftThread = routeThreadId ? getDraftThread(routeThreadId) : null;
       if (isChatNewLocalShortcut(event, keybindings)) {
         const projectId =
-          activeThread?.projectId ?? activeDraftThread?.projectId ?? visibleProjects[0]?.id;
+          activeThread?.projectId ?? activeDraftThread?.projectId ?? sortedVisibleProjects[0]?.id;
         if (!projectId) return;
         event.preventDefault();
         void handleNewThread(projectId);
@@ -928,7 +969,8 @@ export default function Sidebar() {
       }
 
       if (!isChatNewShortcut(event, keybindings)) return;
-      const projectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? visibleProjects[0]?.id;
+      const projectId =
+        activeThread?.projectId ?? activeDraftThread?.projectId ?? sortedVisibleProjects[0]?.id;
       if (!projectId) return;
       event.preventDefault();
       void handleNewThread(projectId, {
@@ -947,7 +989,7 @@ export default function Sidebar() {
     handleNewThread,
     keybindings,
     routeThreadId,
-    visibleProjects,
+    sortedVisibleProjects,
     visibleThreads,
   ]);
 
@@ -1139,11 +1181,11 @@ export default function Sidebar() {
       <SidebarContent className="gap-0">
         <SidebarGroup className="px-2 py-2">
           <SidebarMenu>
-            {visibleProjects.map((project) => {
+            {sortedVisibleProjects.map((project) => {
               const projectThreads = visibleThreads
                 .filter((thread) => thread.projectId === project.id)
                 .toSorted((a, b) => {
-                  const byDate = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                  const byDate = threadActivityTimestamp(b) - threadActivityTimestamp(a);
                   if (byDate !== 0) return byDate;
                   return b.id.localeCompare(a.id);
                 });
@@ -1414,7 +1456,7 @@ export default function Sidebar() {
             })}
           </SidebarMenu>
 
-           {visibleProjects.length === 0 && !addingProject && (
+            {sortedVisibleProjects.length === 0 && !addingProject && (
              <div className="px-2 pt-4 text-center text-xs text-muted-foreground/60">
                {isOpenCodeMode ? "No OpenCode projects yet." : "No projects yet."}
                <br />

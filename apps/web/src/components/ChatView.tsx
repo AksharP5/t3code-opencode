@@ -199,6 +199,7 @@ import { SidebarTrigger } from "./ui/sidebar";
 import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
 import {
+  buildOpenCodeServerConfigInput,
   getAppModelOptions,
   resolveAppModelSelection,
   resolveAppServiceTier,
@@ -206,8 +207,7 @@ import {
   type AppServiceTier,
   useAppSettings,
 } from "../appSettings";
-import OpenCodeChatView from "../opencode/OpenCodeChatView";
-import { useOpenCodeMode } from "../opencode/hooks";
+import { useOpenCodeMode, useOpenCodeThreadSource } from "../opencode/hooks";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -604,17 +604,15 @@ interface ChatViewProps {
 
 export default function ChatView({ threadId }: ChatViewProps) {
   const isOpenCodeMode = useOpenCodeMode();
-  if (isOpenCodeMode) {
-    return <OpenCodeChatView threadId={threadId} />;
-  }
-
-  const threads = useStore((store) => store.threads);
-  const projects = useStore((store) => store.projects);
+  const openCodeState = useOpenCodeThreadSource(threadId);
+  const nativeThreads = useStore((store) => store.threads);
+  const nativeProjects = useStore((store) => store.projects);
   const markThreadVisited = useStore((store) => store.markThreadVisited);
   const syncServerReadModel = useStore((store) => store.syncServerReadModel);
   const setStoreThreadError = useStore((store) => store.setError);
   const setStoreThreadBranch = useStore((store) => store.setThreadBranch);
   const { settings } = useAppSettings();
+  const openCodeConfig = useMemo(() => buildOpenCodeServerConfigInput(settings), [settings]);
   const navigate = useNavigate();
   const rawSearch = useSearch({
     strict: false,
@@ -657,6 +655,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<ChatMessage[]>([]);
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
   optimisticUserMessagesRef.current = optimisticUserMessages;
+  const [externalThreadError, setExternalThreadError] = useState<string | null>(null);
   const [localDraftErrorsByThreadId, setLocalDraftErrorsByThreadId] = useState<
     Record<ThreadId, string | null>
   >({});
@@ -727,6 +726,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const storeNewTerminal = useTerminalStateStore((s) => s.newTerminal);
   const storeSetActiveTerminal = useTerminalStateStore((s) => s.setActiveTerminal);
   const storeCloseTerminal = useTerminalStateStore((s) => s.closeTerminal);
+  const projects = isOpenCodeMode ? openCodeState.projects : nativeProjects;
+  const sourceThreads = isOpenCodeMode ? openCodeState.threads : nativeThreads;
 
   const setPrompt = useCallback(
     (nextPrompt: string) => {
@@ -753,7 +754,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [removeComposerDraftImage, threadId],
   );
 
-  const serverThread = threads.find((t) => t.id === threadId);
+  const serverThread = isOpenCodeMode ? undefined : nativeThreads.find((t) => t.id === threadId);
   const fallbackDraftProject = projects.find((project) => project.id === draftThread?.projectId);
   const localDraftError = serverThread ? null : (localDraftErrorsByThreadId[threadId] ?? null);
   const localDraftThread = useMemo(
@@ -768,13 +769,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
         : undefined,
     [draftThread, fallbackDraftProject?.model, localDraftError, threadId],
   );
-  const activeThread = serverThread ?? localDraftThread;
+  const activeThread =
+    (isOpenCodeMode
+      ? (openCodeState.activeThread ?? sourceThreads.find((thread) => thread.id === threadId))
+      : (serverThread ?? localDraftThread)) ?? null;
+  const isOpenCodeThread = activeThread?.source === "opencode";
+  const threadCapabilities = activeThread?.capabilities ?? NATIVE_THREAD_CAPABILITIES;
   const runtimeMode =
     composerDraft.runtimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
   const interactionMode =
     composerDraft.interactionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE;
   const isServerThread = serverThread !== undefined;
-  const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
+  const isLocalDraftThread = !isOpenCodeMode && !isServerThread && localDraftThread !== undefined;
   const diffSearch = useMemo(
     () => parseDiffRouteSearch(rawSearch as Record<string, unknown>),
     [rawSearch],
@@ -786,7 +792,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const activeProject = projects.find((p) => p.id === activeThread?.projectId);
 
   useEffect(() => {
+    setExternalThreadError(null);
+  }, [isOpenCodeMode, threadId]);
+
+  useEffect(() => {
     if (!activeThread?.id) return;
+    if (isOpenCodeThread) return;
     if (!latestTurnSettled) return;
     if (!activeLatestTurn?.completedAt) return;
     const turnCompletedAt = Date.parse(activeLatestTurn.completedAt);
@@ -799,6 +810,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     activeThread?.id,
     activeThread?.lastVisitedAt,
     activeLatestTurn?.completedAt,
+    isOpenCodeThread,
     latestTurnSettled,
     markThreadVisited,
   ]);
@@ -1100,7 +1112,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
   );
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
-    useTurnDiffSummaries(activeThread);
+    useTurnDiffSummaries(activeThread ?? undefined);
   const turnDiffSummaryByAssistantMessageId = useMemo(() => {
     const byMessageId = new Map<MessageId, TurnDiffSummary>();
     for (const summary of turnDiffSummaries) {
@@ -1245,13 +1257,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
           description: "Switch this thread back to normal chat mode",
         },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
+      const availableSlashCommandItems = isOpenCodeThread ? [] : slashCommandItems;
       const query = composerTrigger.query.trim().toLowerCase();
       if (!query) {
-        return [...slashCommandItems];
+        return [...availableSlashCommandItems];
       }
-      return slashCommandItems.filter(
+      return availableSlashCommandItems.filter(
         (item) => item.command.includes(query) || item.label.slice(1).includes(query),
       );
+    }
+
+    if (isOpenCodeThread) {
+      return [];
     }
 
     return searchableModelOptions
@@ -1272,7 +1289,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
         showFastBadge:
           provider === "codex" && shouldShowFastTierIcon(slug, selectedServiceTierSetting),
       }));
-  }, [composerTrigger, searchableModelOptions, selectedServiceTierSetting, workspaceEntries]);
+  }, [
+    composerTrigger,
+    isOpenCodeThread,
+    searchableModelOptions,
+    selectedServiceTierSetting,
+    workspaceEntries,
+  ]);
   const composerMenuOpen = Boolean(composerTrigger);
   const activeComposerMenuItem = useMemo(
     () =>
@@ -1293,9 +1316,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const providerStatuses = serverConfigQuery.data?.providers ?? EMPTY_PROVIDER_STATUSES;
   const activeProvider = activeThread?.session?.provider ?? "codex";
   const activeProviderStatus = useMemo(
-    () => providerStatuses.find((status) => status.provider === activeProvider) ?? null,
-    [activeProvider, providerStatuses],
+    () =>
+      isOpenCodeThread ? null : (providerStatuses.find((status) => status.provider === activeProvider) ?? null),
+    [activeProvider, isOpenCodeThread, providerStatuses],
   );
+  const displayedThreadError = isOpenCodeThread ? externalThreadError : (activeThread?.error ?? null);
   const activeProjectCwd = activeProject?.cwd ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const threadTerminalRuntimeEnv = useMemo(() => {
@@ -1326,6 +1351,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [keybindings],
   );
   const onToggleDiff = useCallback(() => {
+    if (!threadCapabilities.diff) return;
     void navigate({
       to: "/$threadId",
       params: { threadId },
@@ -1335,7 +1361,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         return diffOpen ? rest : { ...rest, diff: "1" };
       },
     });
-  }, [diffOpen, navigate, threadId]);
+  }, [diffOpen, navigate, threadCapabilities.diff, threadId]);
 
   const envLocked = Boolean(
     activeThread &&
@@ -1346,7 +1372,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const setThreadError = useCallback(
     (targetThreadId: ThreadId | null, error: string | null) => {
       if (!targetThreadId) return;
-      if (threads.some((thread) => thread.id === targetThreadId)) {
+      if (isOpenCodeMode) {
+        setExternalThreadError(error);
+        return;
+      }
+      if (nativeThreads.some((thread) => thread.id === targetThreadId)) {
         setStoreThreadError(targetThreadId, error);
         return;
       }
@@ -1360,7 +1390,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         };
       });
     },
-    [setStoreThreadError, threads],
+    [isOpenCodeMode, nativeThreads, setStoreThreadError],
   );
 
   const focusComposer = useCallback(() => {
@@ -1632,6 +1662,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const handleRuntimeModeChange = useCallback(
     (mode: RuntimeMode) => {
       if (mode === runtimeMode) return;
+      if (!threadCapabilities.runtimeMode) {
+        setThreadError(threadId, "Runtime mode changes are not available for OpenCode-backed threads yet.");
+        return;
+      }
       setComposerDraftRuntimeMode(threadId, mode);
       if (isLocalDraftThread) {
         setDraftThreadContext(threadId, { runtimeMode: mode });
@@ -1644,6 +1678,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
       scheduleComposerFocus,
       setComposerDraftRuntimeMode,
       setDraftThreadContext,
+      setThreadError,
+      threadCapabilities.runtimeMode,
       threadId,
     ],
   );
@@ -1651,6 +1687,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const handleInteractionModeChange = useCallback(
     (mode: ProviderInteractionMode) => {
       if (mode === interactionMode) return;
+      if (!threadCapabilities.planMode) {
+        setThreadError(threadId, "Plan mode is not available for OpenCode-backed threads yet.");
+        return;
+      }
       setComposerDraftInteractionMode(threadId, mode);
       if (isLocalDraftThread) {
         setDraftThreadContext(threadId, { interactionMode: mode });
@@ -1663,6 +1703,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
       scheduleComposerFocus,
       setComposerDraftInteractionMode,
       setDraftThreadContext,
+      setThreadError,
+      threadCapabilities.planMode,
       threadId,
     ],
   );
@@ -2238,12 +2280,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
       }
 
       if (command === "diff.toggle") {
+        if (!threadCapabilities.diff) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         onToggleDiff();
         return;
       }
 
+      if (!threadCapabilities.projectScripts) {
+        return;
+      }
       const scriptId = projectScriptIdFromCommand(command);
       if (!scriptId || !activeProject) return;
       const script = activeProject.scripts.find((entry) => entry.id === scriptId);
@@ -2264,6 +2312,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
     setTerminalOpen,
     runProjectScript,
     splitTerminal,
+    threadCapabilities.diff,
+    threadCapabilities.projectScripts,
     keybindings,
     onToggleDiff,
     toggleTerminalVisibility,
@@ -2271,6 +2321,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
   const addComposerImages = (files: File[]) => {
     if (!activeThreadId || files.length === 0) return;
+    if (!threadCapabilities.composerImages) {
+      setThreadError(activeThreadId, "Image attachments are not available for OpenCode-backed threads yet.");
+      return;
+    }
 
     const nextImages: ComposerImageAttachment[] = [];
     let nextImageCount = composerImagesRef.current.length;
@@ -2315,6 +2369,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
   };
 
   const onComposerPaste = (event: React.ClipboardEvent<HTMLElement>) => {
+    if (!threadCapabilities.composerImages) {
+      return;
+    }
     const files = Array.from(event.clipboardData.files);
     if (files.length === 0) {
       return;
@@ -2328,6 +2385,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
   };
 
   const onComposerDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!threadCapabilities.composerImages) {
+      return;
+    }
     if (!event.dataTransfer.types.includes("Files")) {
       return;
     }
@@ -2337,6 +2397,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
   };
 
   const onComposerDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!threadCapabilities.composerImages) {
+      return;
+    }
     if (!event.dataTransfer.types.includes("Files")) {
       return;
     }
@@ -2346,6 +2409,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
   };
 
   const onComposerDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!threadCapabilities.composerImages) {
+      return;
+    }
     if (!event.dataTransfer.types.includes("Files")) {
       return;
     }
@@ -2361,6 +2427,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
   };
 
   const onComposerDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!threadCapabilities.composerImages) {
+      return;
+    }
     if (!event.dataTransfer.types.includes("Files")) {
       return;
     }
@@ -2439,7 +2508,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       return;
     }
     const standaloneSlashCommand =
-      composerImages.length === 0 ? parseStandaloneComposerSlashCommand(trimmed) : null;
+      !isOpenCodeThread && composerImages.length === 0 ? parseStandaloneComposerSlashCommand(trimmed) : null;
     if (standaloneSlashCommand) {
       await handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
@@ -2450,8 +2519,44 @@ export default function ChatView({ threadId }: ChatViewProps) {
       return;
     }
     if (!trimmed && composerImages.length === 0) return;
-    if (!activeProject) return;
     const threadIdForSend = activeThread.id;
+    const messageIdForSend = newMessageId();
+    const messageCreatedAt = new Date().toISOString();
+    if (isOpenCodeThread) {
+      sendInFlightRef.current = true;
+      beginSendPhase("sending-turn");
+      setThreadError(threadIdForSend, null);
+      shouldAutoScrollRef.current = true;
+      forceStickToBottom();
+      promptRef.current = "";
+      clearComposerDraftContent(threadIdForSend);
+      setComposerHighlightedItemId(null);
+      setComposerCursor(0);
+      setComposerTrigger(null);
+
+      await api.opencode
+        .sendMessage({
+          ...openCodeConfig,
+          sessionId: threadIdForSend,
+          text: trimmed,
+        })
+        .catch((err: unknown) => {
+          promptRef.current = trimmed;
+          setPrompt(trimmed);
+          setComposerCursor(trimmed.length);
+          setComposerTrigger(detectComposerTrigger(trimmed, trimmed.length));
+          setThreadError(
+            threadIdForSend,
+            err instanceof Error ? err.message : "Failed to send message.",
+          );
+        })
+        .finally(() => {
+          sendInFlightRef.current = false;
+          resetSendPhase();
+        });
+      return;
+    }
+    if (!activeProject) return;
     const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
     const baseBranchForWorktree =
       isFirstMessage && envMode === "worktree" && !activeThread.worktreePath
@@ -2474,8 +2579,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     beginSendPhase(baseBranchForWorktree ? "preparing-worktree" : "sending-turn");
 
     const composerImagesSnapshot = [...composerImages];
-    const messageIdForSend = newMessageId();
-    const messageCreatedAt = new Date().toISOString();
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
         type: "image" as const,
@@ -2697,6 +2800,20 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const onInterrupt = async () => {
     const api = readNativeApi();
     if (!api || !activeThread) return;
+    if (isOpenCodeThread) {
+      await api.opencode
+        .abortSession({
+          ...openCodeConfig,
+          sessionId: activeThread.id,
+        })
+        .catch((err: unknown) => {
+          setThreadError(
+            activeThread.id,
+            err instanceof Error ? err.message : "Failed to stop session.",
+          );
+        });
+      return;
+    }
     await api.orchestration.dispatchCommand({
       type: "thread.turn.interrupt",
       commandId: newCommandId(),
@@ -3078,6 +3195,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const onProviderModelSelect = useCallback(
     (provider: ProviderKind, model: ModelSlug) => {
       if (!activeThread) return;
+      if (isOpenCodeThread) {
+        setThreadError(activeThread.id, "Model selection is controlled by OpenCode for this session.");
+        return;
+      }
       if (lockedProvider !== null && provider !== lockedProvider) {
         scheduleComposerFocus();
         return;
@@ -3091,26 +3212,42 @@ export default function ChatView({ threadId }: ChatViewProps) {
     },
     [
       activeThread,
+      isOpenCodeThread,
       lockedProvider,
       scheduleComposerFocus,
       setComposerDraftModel,
       setComposerDraftProvider,
+      setThreadError,
       settings.customCodexModels,
     ],
   );
   const onEffortSelect = useCallback(
     (effort: CodexReasoningEffort) => {
+      if (isOpenCodeThread) {
+        setThreadError(threadId, "Reasoning settings are controlled by OpenCode for this session.");
+        return;
+      }
       setComposerDraftEffort(threadId, effort);
       scheduleComposerFocus();
     },
-    [scheduleComposerFocus, setComposerDraftEffort, threadId],
+    [isOpenCodeThread, scheduleComposerFocus, setComposerDraftEffort, setThreadError, threadId],
   );
   const onCodexFastModeChange = useCallback(
     (enabled: boolean) => {
+      if (isOpenCodeThread) {
+        setThreadError(threadId, "Reasoning settings are controlled by OpenCode for this session.");
+        return;
+      }
       setComposerDraftCodexFastMode(threadId, enabled);
       scheduleComposerFocus();
     },
-    [scheduleComposerFocus, setComposerDraftCodexFastMode, threadId],
+    [
+      isOpenCodeThread,
+      scheduleComposerFocus,
+      setComposerDraftCodexFastMode,
+      setThreadError,
+      threadId,
+    ],
   );
   const onEnvModeChange = useCallback(
     (mode: DraftThreadEnvMode) => {
@@ -3369,6 +3506,41 @@ export default function ChatView({ threadId }: ChatViewProps) {
     void onRevertToTurnCount(targetTurnCount);
   };
 
+  if (isOpenCodeMode && !openCodeState.threadsHydrated) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
+        Loading OpenCode session...
+      </div>
+    );
+  }
+
+  if (isOpenCodeMode && openCodeState.status && !openCodeState.status.healthy) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
+        <header
+          className={cn(
+            "border-b border-border px-3 sm:px-5",
+            isElectron ? "drag-region flex h-[52px] items-center" : "py-2 sm:py-3",
+          )}
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+            <h2 className="text-sm font-medium text-foreground">OpenCode</h2>
+          </div>
+        </header>
+        <div className="mx-auto flex w-full max-w-3xl flex-1 items-center px-3 py-4 sm:px-5">
+          <Alert variant="error">
+            <CircleAlertIcon />
+            <AlertTitle>OpenCode is unavailable</AlertTitle>
+            <AlertDescription>
+              {openCodeState.status.message ?? "T3 Code could not reach the configured OpenCode server."}
+            </AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    );
+  }
+
   // Empty state: no active thread
   if (!activeThread) {
     return (
@@ -3408,9 +3580,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
           activeThreadId={activeThread.id}
           activeThreadTitle={activeThread.title}
           activeProjectName={activeProject?.name}
+          sessionSource={activeThread.source}
           isGitRepo={isGitRepo}
           openInCwd={activeThread.worktreePath ?? activeProject?.cwd ?? null}
-          activeProjectScripts={activeProject?.scripts}
+          activeProjectScripts={threadCapabilities.projectScripts ? activeProject?.scripts : undefined}
           preferredScriptId={
             activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
           }
@@ -3418,7 +3591,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
           availableEditors={availableEditors}
           diffToggleShortcutLabel={diffPanelShortcutLabel}
           gitCwd={gitCwd}
-          diffOpen={diffOpen}
+          diffOpen={threadCapabilities.diff && diffOpen}
+          diffEnabled={threadCapabilities.diff}
           onRunProjectScript={(script) => {
             void runProjectScript(script);
           }}
@@ -3430,8 +3604,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       {/* Error banner */}
       <ProviderHealthBanner status={activeProviderStatus} />
-      <ThreadErrorBanner error={activeThread.error} />
-      <PlanModePanel activePlan={activePlan} />
+      <ThreadErrorBanner error={displayedThreadError} />
+      <PlanModePanel activePlan={threadCapabilities.planMode ? activePlan : null} />
 
       {/* Messages */}
       <div
@@ -3621,6 +3795,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     ? "Type your own answer, or leave this blank to use the selected option"
                     : showPlanFollowUpPrompt && activeProposedPlan
                       ? "Add feedback to refine the plan, or leave this blank to implement it"
+                      : isOpenCodeThread
+                        ? "Continue this OpenCode session..."
                       : phase === "disconnected"
                         ? "Ask for follow-up changes or attach images"
                         : "Ask anything, @tag files/folders, or use /model"
@@ -3648,6 +3824,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     lockedProvider={lockedProvider}
                     modelOptionsByProvider={modelOptionsByProvider}
                     serviceTierSetting={selectedServiceTierSetting}
+                    disabled={isOpenCodeThread}
                     onProviderModelChange={onProviderModelSelect}
                   />
 
@@ -3658,6 +3835,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         effort={selectedEffort}
                         fastModeEnabled={selectedCodexFastModeEnabled}
                         options={reasoningOptions}
+                        disabled={isOpenCodeThread}
                         onEffortChange={onEffortSelect}
                         onFastModeChange={onCodexFastModeChange}
                       />
@@ -3674,8 +3852,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     size="sm"
                     type="button"
                     onClick={toggleInteractionMode}
+                    disabled={!threadCapabilities.planMode}
                     title={
-                      interactionMode === "plan"
+                      !threadCapabilities.planMode
+                        ? "Plan mode is not available for OpenCode-backed threads yet"
+                        : interactionMode === "plan"
                         ? "Plan mode — click to return to normal chat mode"
                         : "Default mode — click to enter plan mode"
                     }
@@ -3700,8 +3881,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         runtimeMode === "full-access" ? "approval-required" : "full-access",
                       )
                     }
+                    disabled={!threadCapabilities.runtimeMode}
                     title={
-                      runtimeMode === "full-access"
+                      !threadCapabilities.runtimeMode
+                        ? "Runtime mode changes are not available for OpenCode-backed threads yet"
+                        : runtimeMode === "full-access"
                         ? "Full access — click to require approvals"
                         : "Approval required — click for full access"
                     }
@@ -3877,7 +4061,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         </form>
       </div>
 
-      {isGitRepo && (
+      {isGitRepo && threadCapabilities.branchSelection && (
         <BranchToolbar
           threadId={activeThread.id}
           onEnvModeChange={onEnvModeChange}
@@ -3989,6 +4173,7 @@ interface ChatHeaderProps {
   activeThreadId: ThreadId;
   activeThreadTitle: string;
   activeProjectName: string | undefined;
+  sessionSource: Thread["source"];
   isGitRepo: boolean;
   openInCwd: string | null;
   activeProjectScripts: ProjectScript[] | undefined;
@@ -3998,6 +4183,7 @@ interface ChatHeaderProps {
   diffToggleShortcutLabel: string | null;
   gitCwd: string | null;
   diffOpen: boolean;
+  diffEnabled: boolean;
   onRunProjectScript: (script: ProjectScript) => void;
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<void>;
   onUpdateProjectScript: (scriptId: string, input: NewProjectScriptInput) => Promise<void>;
@@ -4008,6 +4194,7 @@ const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   activeThreadTitle,
   activeProjectName,
+  sessionSource,
   isGitRepo,
   openInCwd,
   activeProjectScripts,
@@ -4017,6 +4204,7 @@ const ChatHeader = memo(function ChatHeader({
   diffToggleShortcutLabel,
   gitCwd,
   diffOpen,
+  diffEnabled,
   onRunProjectScript,
   onAddProjectScript,
   onUpdateProjectScript,
@@ -4037,6 +4225,7 @@ const ChatHeader = memo(function ChatHeader({
             {activeProjectName}
           </Badge>
         )}
+        {sessionSource === "opencode" && <Badge variant="outline">OpenCode</Badge>}
         {activeProjectName && !isGitRepo && (
           <Badge variant="outline" className="shrink-0 text-[10px] text-amber-700">
             No Git
@@ -4072,14 +4261,16 @@ const ChatHeader = memo(function ChatHeader({
                 aria-label="Toggle diff panel"
                 variant="outline"
                 size="xs"
-                disabled={!isGitRepo}
+                disabled={!isGitRepo || !diffEnabled}
               >
                 <DiffIcon className="size-3" />
               </Toggle>
             }
           />
           <TooltipPopup side="bottom">
-            {!isGitRepo
+            {!diffEnabled
+              ? "Diff view is not available for OpenCode-backed threads yet."
+              : !isGitRepo
               ? "Diff panel is unavailable because this project is not a git repository."
               : diffToggleShortcutLabel
                 ? `Toggle diff panel (${diffToggleShortcutLabel})`
@@ -5497,6 +5688,7 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
   effort: CodexReasoningEffort;
   fastModeEnabled: boolean;
   options: ReadonlyArray<CodexReasoningEffort>;
+  disabled?: boolean;
   onEffortChange: (effort: CodexReasoningEffort) => void;
   onFastModeChange: (enabled: boolean) => void;
 }) {
@@ -5519,6 +5711,10 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
     <Menu
       open={isMenuOpen}
       onOpenChange={(open) => {
+        if (props.disabled) {
+          setIsMenuOpen(false);
+          return;
+        }
         setIsMenuOpen(open);
       }}
     >
@@ -5528,6 +5724,7 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
             size="sm"
             variant="ghost"
             className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+            disabled={props.disabled}
           />
         }
       >
@@ -5540,6 +5737,7 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
           <MenuRadioGroup
             value={props.effort}
             onValueChange={(value) => {
+              if (props.disabled) return;
               if (!value) return;
               const nextEffort = props.options.find((option) => option === value);
               if (!nextEffort) return;
@@ -5560,6 +5758,7 @@ const CodexTraitsPicker = memo(function CodexTraitsPicker(props: {
           <MenuRadioGroup
             value={props.fastModeEnabled ? "on" : "off"}
             onValueChange={(value) => {
+              if (props.disabled) return;
               props.onFastModeChange(value === "on");
             }}
           >
