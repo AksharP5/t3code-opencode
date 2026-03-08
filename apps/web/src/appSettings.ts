@@ -1,9 +1,14 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { Option, Schema } from "effect";
-import { type ProviderKind, type ProviderServiceTier } from "@t3tools/contracts";
+import {
+  type OpenCodeServerConfigInput,
+  type ProviderKind,
+  type ProviderServiceTier,
+} from "@t3tools/contracts";
 import { getDefaultModel, getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
 
 const APP_SETTINGS_STORAGE_KEY = "t3code:app-settings:v1";
+export const DEFAULT_OPENCODE_SERVER_URL = "http://127.0.0.1:4096";
 const MAX_CUSTOM_MODEL_COUNT = 32;
 export const MAX_CUSTOM_MODEL_LENGTH = 256;
 export const APP_SERVICE_TIER_OPTIONS = [
@@ -25,6 +30,8 @@ export const APP_SERVICE_TIER_OPTIONS = [
 ] as const;
 export type AppServiceTier = (typeof APP_SERVICE_TIER_OPTIONS)[number]["value"];
 const AppServiceTierSchema = Schema.Literals(["auto", "fast", "flex"]);
+const AppSessionSourceSchema = Schema.Literals(["native", "opencode"]);
+export type AppSessionSource = typeof AppSessionSourceSchema.Type;
 const MODELS_WITH_FAST_SUPPORT = new Set(["gpt-5.4"]);
 const BUILT_IN_MODEL_SLUGS_BY_PROVIDER: Record<ProviderKind, ReadonlySet<string>> = {
   codex: new Set(getModelOptions("codex").map((option) => option.slug)),
@@ -44,6 +51,16 @@ const AppSettingsSchema = Schema.Struct({
   codexServiceTier: AppServiceTierSchema.pipe(Schema.withConstructorDefault(() => Option.some("auto"))),
   customCodexModels: Schema.Array(Schema.String).pipe(
     Schema.withConstructorDefault(() => Option.some([])),
+  ),
+  sessionSource: AppSessionSourceSchema.pipe(
+    Schema.withConstructorDefault(() => Option.some("native")),
+  ),
+  opencodeServerUrl: Schema.String.check(Schema.isMaxLength(2048)).pipe(
+    Schema.withConstructorDefault(() => Option.some(DEFAULT_OPENCODE_SERVER_URL)),
+  ),
+  opencodeAutoStart: Schema.Boolean.pipe(Schema.withConstructorDefault(() => Option.some(true))),
+  opencodePassword: Schema.String.check(Schema.isMaxLength(4096)).pipe(
+    Schema.withConstructorDefault(() => Option.some("")),
   ),
 });
 export type AppSettings = typeof AppSettingsSchema.Type;
@@ -197,6 +214,16 @@ export function getSlashModelOptions(
     const searchName = option.name.toLowerCase();
     return searchSlug.includes(normalizedQuery) || searchName.includes(normalizedQuery);
   });
+}
+
+export function buildOpenCodeServerConfigInput(settings: AppSettings): OpenCodeServerConfigInput {
+  return {
+    baseUrl: settings.opencodeServerUrl.trim() || DEFAULT_OPENCODE_SERVER_URL,
+    autoStart: settings.opencodeAutoStart,
+    ...(settings.opencodePassword.trim().length > 0
+      ? { password: settings.opencodePassword.trim() }
+      : {}),
+  };
 }
 
 function emitChange(): void {

@@ -1,7 +1,30 @@
 import { ProjectId, ThreadId } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type ComposerImageAttachment, useComposerDraftStore } from "./composerDraftStore";
+function installMemoryLocalStorage() {
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+      clear: () => {
+        storage.clear();
+      },
+    },
+  });
+}
+
+installMemoryLocalStorage();
+
+const composerDraftStoreModule = await import("./composerDraftStore");
+const useComposerDraftStore = composerDraftStoreModule.useComposerDraftStore;
+type ComposerImageAttachment = import("./composerDraftStore").ComposerImageAttachment;
 
 function makeImage(input: {
   id: string;

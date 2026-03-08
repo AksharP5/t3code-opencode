@@ -9,9 +9,11 @@ import {
 import { useEffect, useRef } from "react";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 
+import { useAppSettings } from "../appSettings";
 import { APP_DISPLAY_NAME } from "../branding";
 import { Button } from "../components/ui/button";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "../components/ui/toast";
+import { opencodeQueryKeys } from "../opencode/reactQuery";
 import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -129,6 +131,7 @@ function errorDetails(error: unknown): string {
 }
 
 function EventRouter() {
+  const { settings } = useAppSettings();
   const syncServerReadModel = useStore((store) => store.syncServerReadModel);
   const setProjectExpanded = useStore((store) => store.setProjectExpanded);
   const removeOrphanedTerminalStates = useTerminalStateStore(
@@ -210,6 +213,11 @@ function EventRouter() {
           hasRunningSubprocess,
         );
     });
+    const unsubOpenCodeEvent = api.opencode.onEvent(() => {
+      void queryClient.invalidateQueries({
+        queryKey: opencodeQueryKeys.all,
+      });
+    });
     const unsubWelcome = onServerWelcome((payload) => {
       void (async () => {
         await syncSnapshot();
@@ -282,6 +290,7 @@ function EventRouter() {
       disposed = true;
       unsubDomainEvent();
       unsubTerminalEvent();
+      unsubOpenCodeEvent();
       unsubWelcome();
       unsubServerConfigUpdated();
     };
@@ -290,6 +299,10 @@ function EventRouter() {
     queryClient,
     removeOrphanedTerminalStates,
     setProjectExpanded,
+    settings.opencodeAutoStart,
+    settings.opencodePassword,
+    settings.opencodeServerUrl,
+    settings.sessionSource,
     syncServerReadModel,
   ]);
 

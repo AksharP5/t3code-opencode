@@ -14,6 +14,7 @@ import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   type ClientOrchestrationCommand,
+  type OpenCodeEvent,
   type OrchestrationCommand,
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
@@ -73,6 +74,7 @@ import {
 import { parseBase64DataUrl } from "./imageMime.ts";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
 import { expandHomePath } from "./os-jank.ts";
+import { OpenCodeBridge } from "./opencode/bridge.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -302,6 +304,19 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       data: event,
     });
   });
+
+  const openCodeBridge = new OpenCodeBridge({
+    onEvent: (event: OpenCodeEvent) => {
+      void Effect.runPromise(
+        broadcastPush({
+          type: "push",
+          channel: WS_CHANNELS.opencodeEvent,
+          data: event,
+        }),
+      );
+    },
+  });
+  yield* Effect.addFinalizer(() => Effect.promise(() => openCodeBridge.dispose()));
 
   const normalizeDispatchCommand = Effect.fnUntraced(function* (input: {
     readonly command: ClientOrchestrationCommand;
@@ -891,6 +906,116 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const body = stripRequestTag(request.body);
         const keybindingsConfig = yield* keybindingsManager.upsertKeybindingRule(body);
         return { keybindings: keybindingsConfig, issues: [] };
+      }
+
+      case WS_METHODS.opencodeGetStatus: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.getStatus(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to get OpenCode status: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeEnsureServer: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.ensureServer(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to ensure OpenCode server: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeListProjects: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listProjects(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode projects: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeListSessions: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listSessions(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode sessions: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeGetSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.getSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to get OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeGetMessages: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.getMessages(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to get OpenCode messages: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeGetStatuses: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.getStatuses(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to get OpenCode statuses: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeCreateSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.createSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to create OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeSendMessage: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.sendMessage(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to send OpenCode message: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeAbortSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.abortSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to abort OpenCode session: ${String(cause)}`,
+            }),
+        });
       }
 
       default: {

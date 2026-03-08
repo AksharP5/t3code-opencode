@@ -31,6 +31,14 @@ import {
 import { KeybindingRule } from "./keybindings";
 import { ProjectSearchEntriesInput, ProjectWriteFileInput } from "./project";
 import { OpenInEditorInput } from "./editor";
+import {
+  OpenCodeAbortSessionInput,
+  OpenCodeCreateSessionInput,
+  OpenCodeGetSessionInput,
+  OpenCodeListProjectsInput,
+  OpenCodeListSessionsInput,
+  OpenCodeSendMessageInput,
+} from "./opencode";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
 
@@ -67,6 +75,18 @@ export const WS_METHODS = {
   // Server meta
   serverGetConfig: "server.getConfig",
   serverUpsertKeybinding: "server.upsertKeybinding",
+
+  // OpenCode methods
+  opencodeGetStatus: "opencode.getStatus",
+  opencodeEnsureServer: "opencode.ensureServer",
+  opencodeListProjects: "opencode.listProjects",
+  opencodeListSessions: "opencode.listSessions",
+  opencodeGetSession: "opencode.getSession",
+  opencodeGetMessages: "opencode.getMessages",
+  opencodeGetStatuses: "opencode.getStatuses",
+  opencodeCreateSession: "opencode.createSession",
+  opencodeSendMessage: "opencode.sendMessage",
+  opencodeAbortSession: "opencode.abortSession",
 } as const;
 
 // ── Push Event Channels ──────────────────────────────────────────────
@@ -75,6 +95,7 @@ export const WS_CHANNELS = {
   terminalEvent: "terminal.event",
   serverWelcome: "server.welcome",
   serverConfigUpdated: "server.configUpdated",
+  opencodeEvent: "opencode.event",
 } as const;
 
 // -- Tagged Union of all request body schemas ─────────────────────────
@@ -129,6 +150,18 @@ const WebSocketRequestBody = Schema.Union([
   // Server meta
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverUpsertKeybinding, KeybindingRule),
+
+  // OpenCode methods
+  tagRequestBody(WS_METHODS.opencodeGetStatus, OpenCodeListProjectsInput),
+  tagRequestBody(WS_METHODS.opencodeEnsureServer, OpenCodeListProjectsInput),
+  tagRequestBody(WS_METHODS.opencodeListProjects, OpenCodeListProjectsInput),
+  tagRequestBody(WS_METHODS.opencodeListSessions, OpenCodeListSessionsInput),
+  tagRequestBody(WS_METHODS.opencodeGetSession, OpenCodeGetSessionInput),
+  tagRequestBody(WS_METHODS.opencodeGetMessages, OpenCodeGetSessionInput),
+  tagRequestBody(WS_METHODS.opencodeGetStatuses, OpenCodeListProjectsInput),
+  tagRequestBody(WS_METHODS.opencodeCreateSession, OpenCodeCreateSessionInput),
+  tagRequestBody(WS_METHODS.opencodeSendMessage, OpenCodeSendMessageInput),
+  tagRequestBody(WS_METHODS.opencodeAbortSession, OpenCodeAbortSessionInput),
 ]);
 
 export const WebSocketRequest = Schema.Struct({

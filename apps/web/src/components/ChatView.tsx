@@ -206,6 +206,8 @@ import {
   type AppServiceTier,
   useAppSettings,
 } from "../appSettings";
+import OpenCodeChatView from "../opencode/OpenCodeChatView";
+import { useOpenCodeMode } from "../opencode/hooks";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -265,6 +267,15 @@ const COMPOSER_PATH_QUERY_DEBOUNCE_MS = 120;
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
 const WORKTREE_BRANCH_PREFIX = "t3code";
+const NATIVE_THREAD_CAPABILITIES: Thread["capabilities"] = {
+  branchSelection: true,
+  composerImages: true,
+  diff: true,
+  interrupt: true,
+  planMode: true,
+  projectScripts: true,
+  runtimeMode: true,
+};
 
 function readLastInvokedScriptByProjectFromStorage(): Record<string, string> {
   const stored = localStorage.getItem(LAST_INVOKED_SCRIPT_BY_PROJECT_KEY);
@@ -347,6 +358,8 @@ function buildLocalDraftThread(
     id: threadId,
     codexThreadId: null,
     projectId: draftThread.projectId,
+    source: "native",
+    capabilities: NATIVE_THREAD_CAPABILITIES,
     title: "New thread",
     model: fallbackModel,
     runtimeMode: draftThread.runtimeMode,
@@ -590,6 +603,11 @@ interface ChatViewProps {
 }
 
 export default function ChatView({ threadId }: ChatViewProps) {
+  const isOpenCodeMode = useOpenCodeMode();
+  if (isOpenCodeMode) {
+    return <OpenCodeChatView threadId={threadId} />;
+  }
+
   const threads = useStore((store) => store.threads);
   const projects = useStore((store) => store.projects);
   const markThreadVisited = useStore((store) => store.markThreadVisited);

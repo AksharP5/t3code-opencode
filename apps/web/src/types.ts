@@ -81,12 +81,25 @@ export interface Project {
   model: string;
   expanded: boolean;
   scripts: ProjectScript[];
+  source: "native" | "opencode";
+}
+
+export interface ThreadCapabilities {
+  branchSelection: boolean;
+  composerImages: boolean;
+  diff: boolean;
+  interrupt: boolean;
+  planMode: boolean;
+  projectScripts: boolean;
+  runtimeMode: boolean;
 }
 
 export interface Thread {
   id: ThreadId;
   codexThreadId: string | null;
   projectId: ProjectId;
+  source: "native" | "opencode";
+  capabilities: ThreadCapabilities;
   title: string;
   model: string;
   runtimeMode: RuntimeMode;

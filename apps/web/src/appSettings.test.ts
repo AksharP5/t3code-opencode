@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildOpenCodeServerConfigInput,
   getAppModelOptions,
   getSlashModelOptions,
   normalizeCustomModelSlugs,
@@ -101,5 +102,48 @@ describe("shouldShowFastTierIcon", () => {
     expect(shouldShowFastTierIcon("gpt-5.4", "fast")).toBe(true);
     expect(shouldShowFastTierIcon("gpt-5.4", "auto")).toBe(false);
     expect(shouldShowFastTierIcon("gpt-5.3-codex", "fast")).toBe(false);
+  });
+});
+
+describe("buildOpenCodeServerConfigInput", () => {
+  it("trims values and omits blank passwords", () => {
+    expect(
+      buildOpenCodeServerConfigInput({
+        codexBinaryPath: "",
+        codexHomePath: "",
+        confirmThreadDelete: true,
+        enableAssistantStreaming: false,
+        codexServiceTier: "auto",
+        customCodexModels: [],
+        sessionSource: "opencode",
+        opencodeServerUrl: " http://127.0.0.1:4096 ",
+        opencodeAutoStart: true,
+        opencodePassword: "   ",
+      }),
+    ).toEqual({
+      baseUrl: "http://127.0.0.1:4096",
+      autoStart: true,
+    });
+  });
+
+  it("preserves a configured password", () => {
+    expect(
+      buildOpenCodeServerConfigInput({
+        codexBinaryPath: "",
+        codexHomePath: "",
+        confirmThreadDelete: true,
+        enableAssistantStreaming: false,
+        codexServiceTier: "auto",
+        customCodexModels: [],
+        sessionSource: "opencode",
+        opencodeServerUrl: "http://127.0.0.1:4096",
+        opencodeAutoStart: false,
+        opencodePassword: " secret ",
+      }),
+    ).toEqual({
+      baseUrl: "http://127.0.0.1:4096",
+      autoStart: false,
+      password: "secret",
+    });
   });
 });

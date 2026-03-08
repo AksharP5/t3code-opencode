@@ -7,6 +7,8 @@ import { ZapIcon } from "lucide-react";
 
 import {
   APP_SERVICE_TIER_OPTIONS,
+  type AppSessionSource,
+  buildOpenCodeServerConfigInput,
   MAX_CUSTOM_MODEL_LENGTH,
   shouldShowFastTierIcon,
   useAppSettings,
@@ -15,6 +17,7 @@ import { isElectron } from "../env";
 import { useTheme } from "../hooks/useTheme";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { ensureNativeApi } from "../nativeApi";
+import { opencodeStatusQueryOptions } from "../opencode/reactQuery";
 import { preferredTerminalEditor } from "../terminal-links";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -39,6 +42,23 @@ const THEME_OPTIONS = [
     description: "Always use the dark theme.",
   },
 ] as const;
+
+const SESSION_SOURCE_OPTIONS = [
+  {
+    value: "native",
+    label: "T3 Code",
+    description: "Use the built-in orchestration and local thread store.",
+  },
+  {
+    value: "opencode",
+    label: "OpenCode",
+    description: "Browse and continue real OpenCode sessions over opencode serve.",
+  },
+] satisfies Array<{
+  value: AppSessionSource;
+  label: string;
+  description: string;
+}>;
 
 const MODEL_PROVIDER_SETTINGS: Array<{
   provider: ProviderKind;
@@ -91,7 +111,9 @@ function SettingsRouteView() {
   const { settings, defaults, updateSettings } = useAppSettings();
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
+  const [isEnsuringOpenCodeServer, setIsEnsuringOpenCodeServer] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
+  const [openCodeServerError, setOpenCodeServerError] = useState<string | null>(null);
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Record<ProviderKind, string>
   >({
@@ -104,7 +126,10 @@ function SettingsRouteView() {
   const codexBinaryPath = settings.codexBinaryPath;
   const codexHomePath = settings.codexHomePath;
   const codexServiceTier = settings.codexServiceTier;
+  const sessionSource = settings.sessionSource;
+  const openCodeConfig = buildOpenCodeServerConfigInput(settings);
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
+  const openCodeStatusQuery = useQuery(opencodeStatusQueryOptions(openCodeConfig));
 
   const openKeybindingsFile = useCallback(() => {
     if (!keybindingsConfigPath) return;
@@ -122,6 +147,22 @@ function SettingsRouteView() {
         setIsOpeningKeybindings(false);
       });
   }, [keybindingsConfigPath]);
+
+  const ensureOpenCodeServer = useCallback(() => {
+    setIsEnsuringOpenCodeServer(true);
+    setOpenCodeServerError(null);
+    void ensureNativeApi()
+      .opencode.ensureServer(openCodeConfig)
+      .then(() => openCodeStatusQuery.refetch())
+      .catch((error) => {
+        setOpenCodeServerError(
+          error instanceof Error ? error.message : "Unable to start the OpenCode server.",
+        );
+      })
+      .finally(() => {
+        setIsEnsuringOpenCodeServer(false);
+      });
+  }, [openCodeConfig, openCodeStatusQuery]);
 
   const addCustomModel = useCallback((provider: ProviderKind) => {
     const customModelInput = customModelInputByProvider[provider];
@@ -240,6 +281,137 @@ function SettingsRouteView() {
               <p className="mt-4 text-xs text-muted-foreground">
                 Active theme: <span className="font-medium text-foreground">{resolvedTheme}</span>
               </p>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-4">
+                <h2 className="text-sm font-medium text-foreground">Session source</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Choose whether chat history comes from T3 Code orchestration or a live OpenCode
+                  server.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-2" role="radiogroup" aria-label="Session source">
+                  {SESSION_SOURCE_OPTIONS.map((option) => {
+                    const selected = sessionSource === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        className={`flex w-full items-start justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+                          selected
+                            ? "border-primary/60 bg-primary/8 text-foreground"
+                            : "border-border bg-background text-muted-foreground hover:bg-accent"
+                        }`}
+                        onClick={() => updateSettings({ sessionSource: option.value })}
+                      >
+                        <span className="flex flex-col">
+                          <span className="text-sm font-medium">{option.label}</span>
+                          <span className="text-xs">{option.description}</span>
+                        </span>
+                        {selected ? (
+                          <span className="rounded bg-primary/14 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                            Selected
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {sessionSource === "opencode" ? (
+                  <div className="space-y-4 rounded-xl border border-border bg-background/50 p-4">
+                    <div className="rounded-lg border border-border bg-background px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-medium text-foreground">Connection status</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {openCodeStatusQuery.isPending
+                              ? "Checking OpenCode server..."
+                              : openCodeStatusQuery.data?.state === "ready" && openCodeStatusQuery.data.healthy
+                                ? "Connected"
+                                : openCodeStatusQuery.data?.state === "starting"
+                                  ? "Starting"
+                                  : "Unavailable"}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          {openCodeStatusQuery.data?.healthy ? "healthy" : openCodeStatusQuery.isPending ? "checking" : "error"}
+                        </span>
+                      </div>
+                      {openCodeStatusQuery.data?.message ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {openCodeStatusQuery.data.message}
+                        </p>
+                      ) : null}
+                      {openCodeServerError ? (
+                        <p className="mt-2 text-xs text-destructive">{openCodeServerError}</p>
+                      ) : null}
+                      <div className="mt-3 flex justify-end">
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={ensureOpenCodeServer}
+                          disabled={isEnsuringOpenCodeServer}
+                        >
+                          {isEnsuringOpenCodeServer ? "Starting..." : "Start now"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <label htmlFor="opencode-server-url" className="block space-y-1">
+                      <span className="text-xs font-medium text-foreground">OpenCode server URL</span>
+                      <Input
+                        id="opencode-server-url"
+                        value={settings.opencodeServerUrl}
+                        onChange={(event) =>
+                          updateSettings({ opencodeServerUrl: event.target.value })
+                        }
+                        placeholder="http://127.0.0.1:4096"
+                        spellCheck={false}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        Used for project/session discovery, new session creation, and continuation.
+                      </span>
+                    </label>
+
+                    <label htmlFor="opencode-password" className="block space-y-1">
+                      <span className="text-xs font-medium text-foreground">OpenCode password</span>
+                      <Input
+                        id="opencode-password"
+                        type="password"
+                        value={settings.opencodePassword}
+                        onChange={(event) =>
+                          updateSettings({ opencodePassword: event.target.value })
+                        }
+                        placeholder="Optional"
+                        spellCheck={false}
+                      />
+                    </label>
+
+                    <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Auto-start local OpenCode</p>
+                        <p className="text-xs text-muted-foreground">
+                          If the loopback server is down, T3 Code tries to launch `opencode serve`.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={settings.opencodeAutoStart}
+                        onCheckedChange={(checked) =>
+                          updateSettings({ opencodeAutoStart: Boolean(checked) })
+                        }
+                        aria-label="Auto-start local OpenCode"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </section>
 
             <section className="rounded-2xl border border-border bg-card p-5">

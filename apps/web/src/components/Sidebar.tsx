@@ -18,7 +18,7 @@ import {
 } from "@t3tools/contracts";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { useAppSettings } from "../appSettings";
+import { buildOpenCodeServerConfigInput, useAppSettings } from "../appSettings";
 import { isElectron } from "../env";
 import { APP_STAGE_LABEL } from "../branding";
 import { newCommandId, newProjectId, newThreadId } from "../lib/utils";
@@ -29,6 +29,7 @@ import { derivePendingApprovals } from "../session-logic";
 import { gitRemoveWorktreeMutationOptions, gitStatusQueryOptions } from "../lib/gitReactQuery";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
+import { useOpenCodeMode, useOpenCodeThreadSource } from "../opencode/hooks";
 import { type DraftThreadEnvMode, useComposerDraftStore } from "../composerDraftStore";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { toastManager } from "./ui/toast";
@@ -258,6 +259,7 @@ function ProjectFavicon({ cwd }: { cwd: string }) {
 }
 
 export default function Sidebar() {
+  const isOpenCodeMode = useOpenCodeMode();
   const projects = useStore((store) => store.projects);
   const threads = useStore((store) => store.threads);
   const markThreadUnread = useStore((store) => store.markThreadUnread);
@@ -289,6 +291,11 @@ export default function Sidebar() {
   });
   const queryClient = useQueryClient();
   const removeWorktreeMutation = useMutation(gitRemoveWorktreeMutationOptions({ queryClient }));
+  const openCodeState = useOpenCodeThreadSource(routeThreadId ?? undefined);
+  const openCodeConfig = useMemo(
+    () => buildOpenCodeServerConfigInput(appSettings),
+    [appSettings],
+  );
   const [addingProject, setAddingProject] = useState(false);
   const [newCwd, setNewCwd] = useState("");
   const [isPickingFolder, setIsPickingFolder] = useState(false);
@@ -298,28 +305,33 @@ export default function Sidebar() {
   const [expandedThreadListsByProject, setExpandedThreadListsByProject] = useState<
     ReadonlySet<ProjectId>
   >(() => new Set());
+  const [openCodeExpandedProjectIds, setOpenCodeExpandedProjectIds] = useState<ReadonlySet<ProjectId>>(
+    () => new Set(),
+  );
   const renamingCommittedRef = useRef(false);
   const renamingInputRef = useRef<HTMLInputElement | null>(null);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
+  const visibleProjects = isOpenCodeMode ? openCodeState.projects : projects;
+  const visibleThreads = isOpenCodeMode ? openCodeState.threads : threads;
   const pendingApprovalByThreadId = useMemo(() => {
     const map = new Map<ThreadId, boolean>();
-    for (const thread of threads) {
+    for (const thread of visibleThreads) {
       map.set(thread.id, derivePendingApprovals(thread.activities).length > 0);
     }
     return map;
-  }, [threads]);
+  }, [visibleThreads]);
   const projectCwdById = useMemo(
-    () => new Map(projects.map((project) => [project.id, project.cwd] as const)),
-    [projects],
+    () => new Map(visibleProjects.map((project) => [project.id, project.cwd] as const)),
+    [visibleProjects],
   );
   const threadGitTargets = useMemo(
     () =>
-      threads.map((thread) => ({
+      visibleThreads.map((thread) => ({
         threadId: thread.id,
         branch: thread.branch,
         cwd: thread.worktreePath ?? projectCwdById.get(thread.projectId) ?? null,
       })),
-    [projectCwdById, threads],
+    [projectCwdById, visibleThreads],
   );
   const threadGitStatusCwds = useMemo(
     () => [
@@ -391,6 +403,24 @@ export default function Sidebar() {
         envMode?: DraftThreadEnvMode;
       },
     ): Promise<void> => {
+      if (isOpenCodeMode) {
+        const api = readNativeApi();
+        const project = visibleProjects.find((entry) => entry.id === projectId);
+        if (!api || !project) {
+          return Promise.resolve();
+        }
+        return (async () => {
+          const session = await api.opencode.createSession({
+            ...openCodeConfig,
+            directory: project.cwd,
+          });
+          await navigate({
+            to: "/$threadId",
+            params: { threadId: ThreadId.makeUnsafe(session.id) },
+          });
+        })();
+      }
+
       const hasBranchOption = options?.branch !== undefined;
       const hasWorktreePathOption = options?.worktreePath !== undefined;
       const hasEnvModeOption = options?.envMode !== undefined;
@@ -448,17 +478,20 @@ export default function Sidebar() {
     [
       clearProjectDraftThreadId,
       getDraftThreadByProjectId,
+      isOpenCodeMode,
       navigate,
+      openCodeConfig,
       getDraftThread,
       routeThreadId,
       setDraftThreadContext,
       setProjectDraftThreadId,
+      visibleProjects,
     ],
   );
 
   const focusMostRecentThreadForProject = useCallback(
     (projectId: ProjectId) => {
-      const latestThread = threads
+      const latestThread = visibleThreads
         .filter((thread) => thread.projectId === projectId)
         .toSorted((a, b) => {
           const byDate = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -472,7 +505,7 @@ export default function Sidebar() {
         params: { threadId: latestThread.id },
       });
     },
-    [navigate, threads],
+    [navigate, visibleThreads],
   );
 
   const addProjectFromPath = useCallback(
@@ -489,9 +522,33 @@ export default function Sidebar() {
         setAddingProject(false);
       };
 
-      const existing = projects.find((project) => project.cwd === cwd);
+      const existing = visibleProjects.find((project) => project.cwd === cwd);
       if (existing) {
         focusMostRecentThreadForProject(existing.id);
+        finishAddingProject();
+        return;
+      }
+
+      if (isOpenCodeMode) {
+        try {
+          const session = await api.opencode.createSession({
+            ...openCodeConfig,
+            directory: cwd,
+          });
+          await navigate({
+            to: "/$threadId",
+            params: { threadId: ThreadId.makeUnsafe(session.id) },
+          });
+        } catch (error) {
+          setIsAddingProject(false);
+          toastManager.add({
+            type: "error",
+            title: "Unable to create OpenCode session",
+            description:
+              error instanceof Error ? error.message : "An error occurred while creating the session.",
+          });
+          return;
+        }
         finishAddingProject();
         return;
       }
@@ -522,7 +579,15 @@ export default function Sidebar() {
       }
       finishAddingProject();
     },
-    [focusMostRecentThreadForProject, handleNewThread, isAddingProject, projects],
+    [
+      focusMostRecentThreadForProject,
+      handleNewThread,
+      isAddingProject,
+      isOpenCodeMode,
+      navigate,
+      openCodeConfig,
+      visibleProjects,
+    ],
   );
 
   const handleAddProject = () => {
@@ -598,6 +663,30 @@ export default function Sidebar() {
     async (threadId: ThreadId, position: { x: number; y: number }) => {
       const api = readNativeApi();
       if (!api) return;
+      if (isOpenCodeMode) {
+        const clicked = await api.contextMenu.show(
+          [{ id: "copy-thread-id", label: "Copy Session ID" }],
+          position,
+        );
+        if (clicked !== "copy-thread-id") {
+          return;
+        }
+        try {
+          await copyTextToClipboard(threadId);
+          toastManager.add({
+            type: "success",
+            title: "Session ID copied",
+            description: threadId,
+          });
+        } catch (error) {
+          toastManager.add({
+            type: "error",
+            title: "Failed to copy session ID",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          });
+        }
+        return;
+      }
       const clicked = await api.contextMenu.show(
         [
           { id: "rename", label: "Rename thread" },
@@ -745,6 +834,7 @@ export default function Sidebar() {
       removeWorktreeMutation,
       routeThreadId,
       threads,
+      isOpenCodeMode,
     ],
   );
 
@@ -752,6 +842,9 @@ export default function Sidebar() {
     async (projectId: ProjectId, position: { x: number; y: number }) => {
       const api = readNativeApi();
       if (!api) return;
+      if (isOpenCodeMode) {
+        return;
+      }
       const clicked = await api.contextMenu.show(
         [{ id: "delete", label: "Delete", destructive: true }],
         position,
@@ -803,18 +896,31 @@ export default function Sidebar() {
       getDraftThreadByProjectId,
       projects,
       threads,
+      isOpenCodeMode,
     ],
   );
 
   useEffect(() => {
+    if (!isOpenCodeMode || visibleProjects.length === 0) {
+      return;
+    }
+    setOpenCodeExpandedProjectIds((current) => {
+      if (current.size > 0) {
+        return current;
+      }
+      return new Set(visibleProjects.map((project) => project.id));
+    });
+  }, [isOpenCodeMode, visibleProjects]);
+
+  useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       const activeThread = routeThreadId
-        ? threads.find((thread) => thread.id === routeThreadId)
+        ? visibleThreads.find((thread) => thread.id === routeThreadId)
         : undefined;
       const activeDraftThread = routeThreadId ? getDraftThread(routeThreadId) : null;
       if (isChatNewLocalShortcut(event, keybindings)) {
         const projectId =
-          activeThread?.projectId ?? activeDraftThread?.projectId ?? projects[0]?.id;
+          activeThread?.projectId ?? activeDraftThread?.projectId ?? visibleProjects[0]?.id;
         if (!projectId) return;
         event.preventDefault();
         void handleNewThread(projectId);
@@ -822,7 +928,7 @@ export default function Sidebar() {
       }
 
       if (!isChatNewShortcut(event, keybindings)) return;
-      const projectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? projects[0]?.id;
+      const projectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? visibleProjects[0]?.id;
       if (!projectId) return;
       event.preventDefault();
       void handleNewThread(projectId, {
@@ -836,7 +942,14 @@ export default function Sidebar() {
     return () => {
       window.removeEventListener("keydown", onWindowKeyDown);
     };
-  }, [getDraftThread, handleNewThread, keybindings, projects, routeThreadId, threads]);
+  }, [
+    getDraftThread,
+    handleNewThread,
+    keybindings,
+    routeThreadId,
+    visibleProjects,
+    visibleThreads,
+  ]);
 
   useEffect(() => {
     if (!isElectron) return;
@@ -1026,17 +1139,20 @@ export default function Sidebar() {
       <SidebarContent className="gap-0">
         <SidebarGroup className="px-2 py-2">
           <SidebarMenu>
-            {projects.map((project) => {
-              const projectThreads = threads
+            {visibleProjects.map((project) => {
+              const projectThreads = visibleThreads
                 .filter((thread) => thread.projectId === project.id)
                 .toSorted((a, b) => {
                   const byDate = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
                   if (byDate !== 0) return byDate;
                   return b.id.localeCompare(a.id);
                 });
+              const projectExpanded = isOpenCodeMode
+                ? openCodeExpandedProjectIds.has(project.id)
+                : project.expanded;
               const isThreadListExpanded = expandedThreadListsByProject.has(project.id);
               const hasHiddenThreads = projectThreads.length > THREAD_PREVIEW_LIMIT;
-              const visibleThreads =
+              const visibleProjectThreads =
                 hasHiddenThreads && !isThreadListExpanded
                   ? projectThreads.slice(0, THREAD_PREVIEW_LIMIT)
                   : projectThreads;
@@ -1045,8 +1161,20 @@ export default function Sidebar() {
                 <Collapsible
                   key={project.id}
                   className="group/collapsible"
-                  open={project.expanded}
+                  open={projectExpanded}
                   onOpenChange={(open) => {
+                    if (isOpenCodeMode) {
+                      setOpenCodeExpandedProjectIds((current) => {
+                        const next = new Set(current);
+                        if (open) {
+                          next.add(project.id);
+                        } else {
+                          next.delete(project.id);
+                        }
+                        return next;
+                      });
+                      return;
+                    }
                     if (open === project.expanded) return;
                     toggleProject(project.id);
                   }}
@@ -1068,11 +1196,11 @@ export default function Sidebar() {
                           });
                         }}
                       >
-                        <ChevronRightIcon
-                          className={`-ml-0.5 size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 ${
-                            project.expanded ? "rotate-90" : ""
+                            <ChevronRightIcon
+                              className={`-ml-0.5 size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 ${
+                            projectExpanded ? "rotate-90" : ""
                           }`}
-                        />
+                            />
                         <ProjectFavicon cwd={project.cwd} />
                         <span className="flex-1 truncate text-xs font-medium text-foreground/90">
                           {project.name}
@@ -1110,7 +1238,7 @@ export default function Sidebar() {
 
                     <CollapsibleContent>
                       <SidebarMenuSub className="mx-1 my-0 w-full translate-x-0 gap-0 px-1.5 py-0">
-                        {visibleThreads.map((thread) => {
+                        {visibleProjectThreads.map((thread) => {
                           const isActive = routeThreadId === thread.id;
                           const threadStatus = threadStatusPill(
                             thread,
@@ -1286,13 +1414,13 @@ export default function Sidebar() {
             })}
           </SidebarMenu>
 
-          {projects.length === 0 && !addingProject && (
-            <div className="px-2 pt-4 text-center text-xs text-muted-foreground/60">
-              No projects yet.
-              <br />
-              Add one to get started.
-            </div>
-          )}
+           {visibleProjects.length === 0 && !addingProject && (
+             <div className="px-2 pt-4 text-center text-xs text-muted-foreground/60">
+               {isOpenCodeMode ? "No OpenCode projects yet." : "No projects yet."}
+               <br />
+               {isOpenCodeMode ? "Create a session in a folder to get started." : "Add one to get started."}
+             </div>
+           )}
         </SidebarGroup>
       </SidebarContent>
 
@@ -1301,11 +1429,11 @@ export default function Sidebar() {
         {addingProject ? (
           <>
             <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
-              Add project
+              {isOpenCodeMode ? "New OpenCode session" : "Add project"}
             </p>
             <input
               className="mb-2 w-full rounded-md border border-border bg-secondary px-2 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none"
-              placeholder="/path/to/project"
+              placeholder={isOpenCodeMode ? "/path/to/session-directory" : "/path/to/project"}
               value={newCwd}
               onChange={(event) => setNewCwd(event.target.value)}
               onKeyDown={(event) => {
@@ -1320,9 +1448,9 @@ export default function Sidebar() {
                 onClick={() => void handlePickFolder()}
                 disabled={isPickingFolder || isAddingProject}
               >
-                {isPickingFolder ? "Picking folder..." : "Browse for folder"}
-              </button>
-            )}
+                 {isPickingFolder ? "Picking folder..." : "Browse for folder"}
+               </button>
+             )}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -1330,8 +1458,8 @@ export default function Sidebar() {
                 onClick={handleAddProject}
                 disabled={isAddingProject}
               >
-                {isAddingProject ? "Adding..." : "Add"}
-              </button>
+                 {isAddingProject ? (isOpenCodeMode ? "Creating..." : "Adding...") : isOpenCodeMode ? "Create" : "Add"}
+               </button>
               <button
                 type="button"
                 className="flex-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground/80 transition-colors duration-150 hover:bg-secondary"
@@ -1347,9 +1475,9 @@ export default function Sidebar() {
             className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-2 text-xs text-muted-foreground/70 transition-colors duration-150 hover:border-ring hover:text-muted-foreground"
             onClick={() => setAddingProject(true)}
           >
-            + Add project
-          </button>
-        )}
+             {isOpenCodeMode ? "+ New session" : "+ Add project"}
+           </button>
+         )}
       </SidebarFooter>
     </>
   );

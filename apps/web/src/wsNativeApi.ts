@@ -1,4 +1,5 @@
 import {
+  OpenCodeEvent,
   OrchestrationEvent,
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
@@ -185,6 +186,23 @@ export function createWsNativeApi(): NativeApi {
     server: {
       getConfig: () => transport.request(WS_METHODS.serverGetConfig),
       upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),
+    },
+    opencode: {
+      getStatus: (input) => transport.request(WS_METHODS.opencodeGetStatus, input),
+      ensureServer: (input) => transport.request(WS_METHODS.opencodeEnsureServer, input),
+      listProjects: (input) => transport.request(WS_METHODS.opencodeListProjects, input),
+      listSessions: (input) => transport.request(WS_METHODS.opencodeListSessions, input),
+      getSession: (input) => transport.request(WS_METHODS.opencodeGetSession, input),
+      getMessages: (input) => transport.request(WS_METHODS.opencodeGetMessages, input),
+      getStatuses: (input) => transport.request(WS_METHODS.opencodeGetStatuses, input),
+      createSession: (input) => transport.request(WS_METHODS.opencodeCreateSession, input),
+      sendMessage: (input) => transport.request(WS_METHODS.opencodeSendMessage, input),
+      abortSession: (input) => transport.request(WS_METHODS.opencodeAbortSession, input),
+      onEvent: (callback) =>
+        transport.subscribe(WS_CHANNELS.opencodeEvent, (data) => {
+          const payload = decodeAndWarnOnFailure(OpenCodeEvent, data);
+          if (payload) callback(payload);
+        }),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

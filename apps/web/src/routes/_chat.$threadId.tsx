@@ -6,6 +6,7 @@ import ChatView from "../components/ChatView";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useOpenCodeMode, useOpenCodeThreadSource } from "../opencode/hooks";
 import { useStore } from "../store";
 import { Sheet, SheetPopup } from "../components/ui/sheet";
 import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
@@ -133,17 +134,22 @@ const DiffPanelInlineSidebar = (props: {
 };
 
 function ChatThreadRouteView() {
+  const isOpenCodeMode = useOpenCodeMode();
   const threadsHydrated = useStore((store) => store.threadsHydrated);
   const navigate = useNavigate();
   const threadId = Route.useParams({
     select: (params) => ThreadId.makeUnsafe(params.threadId),
   });
+  const openCodeState = useOpenCodeThreadSource(threadId);
   const search = Route.useSearch();
   const threadExists = useStore((store) => store.threads.some((thread) => thread.id === threadId));
   const draftThreadExists = useComposerDraftStore(
     (store) => Object.hasOwn(store.draftThreadsByThreadId, threadId),
   );
-  const routeThreadExists = threadExists || draftThreadExists;
+  const routeThreadExists = isOpenCodeMode
+    ? openCodeState.threads.some((thread) => thread.id === threadId)
+    : threadExists || draftThreadExists;
+  const threadDataHydrated = isOpenCodeMode ? openCodeState.threadsHydrated : threadsHydrated;
   const diffOpen = search.diff === "1";
   const shouldUseDiffSheet = useMediaQuery(DIFF_INLINE_LAYOUT_MEDIA_QUERY);
   const closeDiff = useCallback(() => {
@@ -167,7 +173,7 @@ function ChatThreadRouteView() {
   }, [navigate, threadId]);
 
   useEffect(() => {
-    if (!threadsHydrated) {
+    if (!threadDataHydrated) {
       return;
     }
 
@@ -175,10 +181,18 @@ function ChatThreadRouteView() {
       void navigate({ to: "/", replace: true });
       return;
     }
-  }, [navigate, routeThreadExists, threadsHydrated, threadId]);
+  }, [navigate, routeThreadExists, threadDataHydrated, threadId]);
 
-  if (!threadsHydrated || !routeThreadExists) {
+  if (!threadDataHydrated || !routeThreadExists) {
     return null;
+  }
+
+  if (isOpenCodeMode) {
+    return (
+      <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
+        <ChatView key={threadId} threadId={threadId} />
+      </SidebarInset>
+    );
   }
 
   if (!shouldUseDiffSheet) {

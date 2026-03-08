@@ -15,6 +15,16 @@ import {
 import { create } from "zustand";
 import { type ChatMessage, type Project, type Thread } from "./types";
 
+const NATIVE_THREAD_CAPABILITIES: Thread["capabilities"] = {
+  branchSelection: true,
+  composerImages: true,
+  diff: true,
+  interrupt: true,
+  planMode: true,
+  projectScripts: true,
+  runtimeMode: true,
+};
+
 // ── State ────────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -119,7 +129,8 @@ function mapProjectsFromReadModel(
           ? persistedExpandedProjectCwds.has(project.workspaceRoot)
           : true),
       scripts: project.scripts.map((script) => ({ ...script })),
-    };
+      source: "native" as const,
+    } satisfies Project;
   });
 }
 
@@ -213,6 +224,8 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
         id: thread.id,
         codexThreadId: null,
         projectId: thread.projectId,
+        source: "native" as const,
+        capabilities: NATIVE_THREAD_CAPABILITIES,
         title: thread.title,
         model: resolveModelSlugForProvider(
           inferProviderForThreadModel({
@@ -277,7 +290,7 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
           files: checkpoint.files.map((file) => ({ ...file })),
         })),
         activities: thread.activities.map((activity) => ({ ...activity })),
-      };
+      } satisfies Thread;
     });
   return {
     ...state,

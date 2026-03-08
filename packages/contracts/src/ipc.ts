@@ -22,6 +22,21 @@ import type {
 } from "./project";
 import type { ServerConfig } from "./server";
 import type {
+  OpenCodeAbortSessionInput,
+  OpenCodeCreateSessionInput,
+  OpenCodeEvent,
+  OpenCodeGetSessionInput,
+  OpenCodeListProjectsInput,
+  OpenCodeListSessionsInput,
+  OpenCodeMessage,
+  OpenCodeProject,
+  OpenCodeSendMessageInput,
+  OpenCodeSession,
+  OpenCodeSessionStatusMap,
+  OpenCodeSessionSummary,
+  OpenCodeStatus,
+} from "./opencode";
+import type {
   TerminalClearInput,
   TerminalCloseInput,
   TerminalEvent,
@@ -137,6 +152,19 @@ export interface NativeApi {
   server: {
     getConfig: () => Promise<ServerConfig>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
+  };
+  opencode: {
+    getStatus: (input: OpenCodeListProjectsInput) => Promise<OpenCodeStatus>;
+    ensureServer: (input: OpenCodeListProjectsInput) => Promise<OpenCodeStatus>;
+    listProjects: (input: OpenCodeListProjectsInput) => Promise<OpenCodeProject[]>;
+    listSessions: (input: OpenCodeListSessionsInput) => Promise<OpenCodeSessionSummary[]>;
+    getSession: (input: OpenCodeGetSessionInput) => Promise<OpenCodeSession>;
+    getMessages: (input: OpenCodeGetSessionInput) => Promise<OpenCodeMessage[]>;
+    getStatuses: (input: OpenCodeListProjectsInput) => Promise<OpenCodeSessionStatusMap>;
+    createSession: (input: OpenCodeCreateSessionInput) => Promise<OpenCodeSession>;
+    sendMessage: (input: OpenCodeSendMessageInput) => Promise<OpenCodeMessage | null>;
+    abortSession: (input: OpenCodeAbortSessionInput) => Promise<boolean>;
+    onEvent: (callback: (event: OpenCodeEvent) => void) => () => void;
   };
   orchestration: {
     getSnapshot: () => Promise<OrchestrationReadModel>;
