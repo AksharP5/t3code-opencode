@@ -12,6 +12,7 @@ import {
   type OpenCodeSession,
   type OpenCodeSessionSummary,
   type OrchestrationLatestTurn,
+  OrchestrationProposedPlanId,
   type OrchestrationThreadActivity,
   ProjectId,
   ThreadId,
@@ -169,6 +170,7 @@ export function mapOpenCodeThreadDetail(input: {
     runtimeMode: resolveThreadRuntimeMode(input.session),
     interactionMode: resolveThreadInteractionMode(input.messages, input.agentCatalog),
     messages: input.messages.map(mapOpenCodeMessage),
+    proposedPlans: deriveOpenCodeProposedPlans(input.messages, input.agentCatalog),
     capabilities: resolveThreadCapabilities({
       providerCatalog: input.providerCatalog,
       provider: summary.session?.provider ?? "codex",
@@ -189,6 +191,38 @@ export function mapOpenCodeThreadDetail(input: {
     }),
     activities: mergeOpenCodeActivities(input.messages, input.activities ?? []),
   };
+}
+
+function deriveOpenCodeProposedPlans(
+  messages: OpenCodeMessage[],
+  agentCatalog?: OpenCodeAgentCatalog | null | undefined,
+): Thread["proposedPlans"] {
+  const planAgent = agentCatalog?.planAgent;
+  if (!planAgent) {
+    return [];
+  }
+
+  return messages.flatMap((message) => {
+    if (message.info.role !== "assistant" || message.info.agent !== planAgent) {
+      return [];
+    }
+    const planMarkdown = partsToText(message.parts, message.info.role).trim();
+    if (!planMarkdown) {
+      return [];
+    }
+    const updatedAt = toIso(
+      message.info.time.completed ?? message.info.time.end ?? message.info.time.created,
+    );
+    return [
+      {
+        id: OrchestrationProposedPlanId.makeUnsafe(`opencode-plan-${message.info.id}`),
+        turnId: resolveMessageTurnId(message),
+        planMarkdown,
+        createdAt: toIso(message.info.time.created),
+        updatedAt,
+      },
+    ];
+  });
 }
 
 function resolveLatestTurn(

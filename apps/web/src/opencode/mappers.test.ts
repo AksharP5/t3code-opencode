@@ -208,6 +208,20 @@ describe("OpenCode mappers", () => {
             },
           },
         }),
+        makeMessage({
+          info: {
+            id: "message-2",
+            sessionID: "session-1",
+            role: "assistant",
+            agent: "plan",
+            parentID: "message-1",
+            time: {
+              created: 2,
+              completed: 3,
+            },
+          },
+          parts: [{ type: "text", text: "Outline the rollout" }],
+        }),
       ],
       projectId: "project-1",
       status: { type: "idle" },
@@ -218,6 +232,8 @@ describe("OpenCode mappers", () => {
     expect(thread.interactionMode).toBe("plan");
     expect(thread.capabilities.planMode).toBe(true);
     expect(thread.worktreePath).toBe("/tmp/project-a/worktree-a");
+    expect(thread.proposedPlans).toHaveLength(1);
+    expect(thread.proposedPlans[0]?.planMarkdown).toContain("Outline the rollout");
   });
 
   it("synthesizes latest turn state from OpenCode messages", () => {
