@@ -13,6 +13,7 @@ import type {
   OpenCodeGetVcsInput,
   OpenCodeGetSessionInput,
   OpenCodeGetTodoInput,
+  OpenCodeListMcpServersInput,
   OpenCodeListProviderAuthMethodsInput,
   OpenCodeListProjectsInput,
   OpenCodeListPermissionsInput,
@@ -22,11 +23,17 @@ import type {
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
   OpenCodeRevertSessionInput,
+  OpenCodeAuthenticateMcpInput,
   OpenCodeRemoveProviderAuthInput,
+  OpenCodeRemoveMcpAuthInput,
   OpenCodeSendMessageInput,
   OpenCodeSetProviderApiKeyInput,
   OpenCodeShareSessionInput,
+  OpenCodeStartMcpAuthInput,
   OpenCodeStatus,
+  OpenCodeCompleteMcpAuthInput,
+  OpenCodeConnectMcpInput,
+  OpenCodeDisconnectMcpInput,
   OpenCodeUnrevertSessionInput,
   OpenCodeUnshareSessionInput,
   OpenCodeUpdateSessionInput,
@@ -34,6 +41,9 @@ import type {
 import {
   authorizeOpenCodeProvider,
   abortOpenCodeSession,
+  authenticateOpenCodeMcp,
+  completeOpenCodeMcpAuth,
+  connectOpenCodeMcp,
   completeOpenCodeProviderAuth,
   createOpenCodeSession,
   deleteOpenCodeSession,
@@ -47,6 +57,7 @@ import {
   getOpenCodeVcs,
   listOpenCodeAgents,
   listOpenCodeProviderAuthMethods,
+  listOpenCodeMcpServers,
   listOpenCodeProviders,
   listOpenCodePermissions,
   listOpenCodeQuestions,
@@ -56,11 +67,14 @@ import {
   replyOpenCodeQuestion,
   rejectOpenCodeQuestion,
   removeOpenCodeProviderAuth,
+  removeOpenCodeMcpAuth,
   revertOpenCodeSession,
   setOpenCodeProviderApiKey,
   sendOpenCodeMessage,
   shareOpenCodeSession,
+  startOpenCodeMcpAuth,
   streamOpenCodeEvents,
+  disconnectOpenCodeMcp,
   unrevertOpenCodeSession,
   unshareOpenCodeSession,
   updateOpenCodeSession,
@@ -148,6 +162,11 @@ export class OpenCodeBridge {
     return listOpenCodeProviderAuthMethods(config);
   }
 
+  async listMcpServers(input: OpenCodeListMcpServersInput) {
+    const config = await this.ensureReady(input);
+    return listOpenCodeMcpServers(config);
+  }
+
   async authorizeProvider(input: OpenCodeAuthorizeProviderInput) {
     const config = await this.ensureReady(input);
     return authorizeOpenCodeProvider(input, config);
@@ -166,6 +185,36 @@ export class OpenCodeBridge {
   async removeProviderAuth(input: OpenCodeRemoveProviderAuthInput) {
     const config = await this.ensureReady(input);
     return removeOpenCodeProviderAuth(input, config);
+  }
+
+  async startMcpAuth(input: OpenCodeStartMcpAuthInput) {
+    const config = await this.ensureReady(input);
+    return startOpenCodeMcpAuth(input, config);
+  }
+
+  async completeMcpAuth(input: OpenCodeCompleteMcpAuthInput) {
+    const config = await this.ensureReady(input);
+    return completeOpenCodeMcpAuth(input, config);
+  }
+
+  async authenticateMcp(input: OpenCodeAuthenticateMcpInput) {
+    const config = await this.ensureReady(input);
+    return authenticateOpenCodeMcp(input, config);
+  }
+
+  async removeMcpAuth(input: OpenCodeRemoveMcpAuthInput) {
+    const config = await this.ensureReady(input);
+    return removeOpenCodeMcpAuth(input, config);
+  }
+
+  async connectMcp(input: OpenCodeConnectMcpInput) {
+    const config = await this.ensureReady(input);
+    return connectOpenCodeMcp(input, config);
+  }
+
+  async disconnectMcp(input: OpenCodeDisconnectMcpInput) {
+    const config = await this.ensureReady(input);
+    return disconnectOpenCodeMcp(input, config);
   }
 
   async listAgents(input: OpenCodeListAgentsInput) {

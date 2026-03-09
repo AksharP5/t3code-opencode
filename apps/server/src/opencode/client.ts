@@ -9,6 +9,8 @@ import type {
   OpenCodeGetTodoInput,
   OpenCodeGetVcsInput,
   OpenCodeMessage,
+  OpenCodeMcpAuthStartResult,
+  OpenCodeMcpStatus,
   OpenCodePermissionRequest,
   OpenCodeProviderAuthMethod,
   OpenCodeProviderAuthorization,
@@ -18,13 +20,19 @@ import type {
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
   OpenCodeRevertSessionInput,
+  OpenCodeAuthenticateMcpInput,
   OpenCodeAuthorizeProviderInput,
+  OpenCodeCompleteMcpAuthInput,
   OpenCodeCompleteProviderAuthInput,
+  OpenCodeConnectMcpInput,
+  OpenCodeDisconnectMcpInput,
+  OpenCodeRemoveMcpAuthInput,
   OpenCodeRemoveProviderAuthInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeShareSessionInput,
   OpenCodeSetProviderApiKeyInput,
+  OpenCodeStartMcpAuthInput,
   OpenCodeSessionStatusMap,
   OpenCodeSessionSummary,
   OpenCodeStatus,
@@ -42,6 +50,8 @@ import {
   OpenCodePermissionRequest as OpenCodePermissionRequestSchema,
   OpenCodeProviderAuthMethod as OpenCodeProviderAuthMethodSchema,
   OpenCodeProviderAuthorization as OpenCodeProviderAuthorizationSchema,
+  OpenCodeMcpAuthStartResult as OpenCodeMcpAuthStartResultSchema,
+  OpenCodeMcpStatus as OpenCodeMcpStatusSchema,
   OpenCodeQuestionRequest as OpenCodeQuestionRequestSchema,
   OpenCodeProviderCatalog as OpenCodeProviderCatalogSchema,
   OpenCodeProject as OpenCodeProjectSchema,
@@ -68,9 +78,13 @@ const decodePermissions = Schema.decodeUnknownSync(Schema.Array(OpenCodePermissi
 const decodeProviderAuthMethods = Schema.decodeUnknownSync(
   Schema.Record(Schema.String, Schema.Array(OpenCodeProviderAuthMethodSchema)),
 );
+const decodeMcpStatuses = Schema.decodeUnknownSync(
+  Schema.Record(Schema.String, OpenCodeMcpStatusSchema),
+);
 const decodeProviderAuthorization = Schema.decodeUnknownSync(
   Schema.NullOr(OpenCodeProviderAuthorizationSchema),
 );
+const decodeMcpAuthStartResult = Schema.decodeUnknownSync(OpenCodeMcpAuthStartResultSchema);
 const decodeQuestions = Schema.decodeUnknownSync(Schema.Array(OpenCodeQuestionRequestSchema));
 const decodeEvent = Schema.decodeUnknownSync(OpenCodeEventSchema);
 const decodeVcsInfo = Schema.decodeUnknownSync(OpenCodeVcsInfoSchema);
@@ -197,6 +211,110 @@ export async function removeOpenCodeProviderAuth(
   );
   if (!response.ok) {
     throw new Error(`OpenCode provider auth removal failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
+}
+
+export async function listOpenCodeMcpServers(
+  config: ResolvedOpenCodeConfig,
+): Promise<Record<string, OpenCodeMcpStatus>> {
+  const response = await fetch(`${config.baseUrl}/mcp`, {
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode MCP status lookup failed with ${response.status}.`);
+  }
+  const statuses = decodeMcpStatuses(await response.json());
+  return Object.fromEntries(Object.entries(statuses));
+}
+
+export async function startOpenCodeMcpAuth(
+  input: OpenCodeStartMcpAuthInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeMcpAuthStartResult> {
+  const response = await fetch(`${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/auth`, {
+    method: "POST",
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode MCP auth start failed with ${response.status}.`);
+  }
+  return decodeMcpAuthStartResult(await response.json());
+}
+
+export async function completeOpenCodeMcpAuth(
+  input: OpenCodeCompleteMcpAuthInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeMcpStatus> {
+  const response = await fetch(
+    `${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/auth/callback`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify({ code: input.code }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode MCP auth completion failed with ${response.status}.`);
+  }
+  return Schema.decodeUnknownSync(OpenCodeMcpStatusSchema)(await response.json());
+}
+
+export async function authenticateOpenCodeMcp(
+  input: OpenCodeAuthenticateMcpInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeMcpStatus> {
+  const response = await fetch(
+    `${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/auth/authenticate`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode MCP authenticate failed with ${response.status}.`);
+  }
+  return Schema.decodeUnknownSync(OpenCodeMcpStatusSchema)(await response.json());
+}
+
+export async function removeOpenCodeMcpAuth(
+  input: OpenCodeRemoveMcpAuthInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(`${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/auth`, {
+    method: "DELETE",
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode MCP auth removal failed with ${response.status}.`);
+  }
+  return ((await response.json()) as { success?: boolean }).success === true;
+}
+
+export async function connectOpenCodeMcp(
+  input: OpenCodeConnectMcpInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(`${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/connect`, {
+    method: "POST",
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode MCP connect failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
+}
+
+export async function disconnectOpenCodeMcp(
+  input: OpenCodeDisconnectMcpInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(`${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/disconnect`, {
+    method: "POST",
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode MCP disconnect failed with ${response.status}.`);
   }
   return (await response.json()) === true;
 }

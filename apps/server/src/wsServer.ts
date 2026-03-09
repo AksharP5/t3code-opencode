@@ -952,6 +952,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeListMcpServers: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listMcpServers(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode MCP servers: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeAuthorizeProvider: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({
@@ -992,6 +1003,72 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           catch: (cause) =>
             new RouteRequestError({
               message: `Failed to remove OpenCode provider auth: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeStartMcpAuth: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.startMcpAuth(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to start OpenCode MCP auth: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeCompleteMcpAuth: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.completeMcpAuth(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to complete OpenCode MCP auth: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeAuthenticateMcp: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.authenticateMcp(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to authenticate OpenCode MCP: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeRemoveMcpAuth: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.removeMcpAuth(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to remove OpenCode MCP auth: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeConnectMcp: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.connectMcp(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to connect OpenCode MCP server: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeDisconnectMcp: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.disconnectMcp(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to disconnect OpenCode MCP server: ${String(cause)}`,
             }),
         });
       }

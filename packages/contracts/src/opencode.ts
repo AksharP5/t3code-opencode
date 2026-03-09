@@ -138,6 +138,20 @@ export const OpenCodeProviderAuthorization = Schema.Struct({
 });
 export type OpenCodeProviderAuthorization = typeof OpenCodeProviderAuthorization.Type;
 
+export const OpenCodeMcpStatus = Schema.Union([
+  Schema.Struct({ status: Schema.Literal("connected") }),
+  Schema.Struct({ status: Schema.Literal("disabled") }),
+  Schema.Struct({ status: Schema.Literal("needs_auth") }),
+  Schema.Struct({ status: Schema.Literal("failed"), error: Schema.String }),
+  Schema.Struct({ status: Schema.Literal("needs_client_registration"), error: Schema.String }),
+]);
+export type OpenCodeMcpStatus = typeof OpenCodeMcpStatus.Type;
+
+export const OpenCodeMcpAuthStartResult = Schema.Struct({
+  authorizationUrl: Schema.String,
+});
+export type OpenCodeMcpAuthStartResult = typeof OpenCodeMcpAuthStartResult.Type;
+
 const OpenCodeSessionTime = Schema.Struct({
   created: OpenCodeTimestamp,
   updated: OpenCodeTimestamp,
@@ -447,6 +461,9 @@ export type OpenCodeListProvidersInput = typeof OpenCodeListProvidersInput.Type;
 export const OpenCodeListProviderAuthMethodsInput = OpenCodeServerConfigInput;
 export type OpenCodeListProviderAuthMethodsInput = typeof OpenCodeListProviderAuthMethodsInput.Type;
 
+export const OpenCodeListMcpServersInput = OpenCodeServerConfigInput;
+export type OpenCodeListMcpServersInput = typeof OpenCodeListMcpServersInput.Type;
+
 export const OpenCodeListAgentsInput = OpenCodeServerConfigInput;
 export type OpenCodeListAgentsInput = typeof OpenCodeListAgentsInput.Type;
 
@@ -583,6 +600,43 @@ export const OpenCodeCompleteProviderAuthInput = Schema.Struct({
   code: Schema.optional(Schema.String),
 });
 export type OpenCodeCompleteProviderAuthInput = typeof OpenCodeCompleteProviderAuthInput.Type;
+
+export const OpenCodeStartMcpAuthInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  serverName: TrimmedNonEmptyString,
+});
+export type OpenCodeStartMcpAuthInput = typeof OpenCodeStartMcpAuthInput.Type;
+
+export const OpenCodeCompleteMcpAuthInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  serverName: TrimmedNonEmptyString,
+  code: TrimmedNonEmptyString,
+});
+export type OpenCodeCompleteMcpAuthInput = typeof OpenCodeCompleteMcpAuthInput.Type;
+
+export const OpenCodeAuthenticateMcpInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  serverName: TrimmedNonEmptyString,
+});
+export type OpenCodeAuthenticateMcpInput = typeof OpenCodeAuthenticateMcpInput.Type;
+
+export const OpenCodeRemoveMcpAuthInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  serverName: TrimmedNonEmptyString,
+});
+export type OpenCodeRemoveMcpAuthInput = typeof OpenCodeRemoveMcpAuthInput.Type;
+
+export const OpenCodeConnectMcpInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  serverName: TrimmedNonEmptyString,
+});
+export type OpenCodeConnectMcpInput = typeof OpenCodeConnectMcpInput.Type;
+
+export const OpenCodeDisconnectMcpInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  serverName: TrimmedNonEmptyString,
+});
+export type OpenCodeDisconnectMcpInput = typeof OpenCodeDisconnectMcpInput.Type;
 
 export const OpenCodeDeleteSessionInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,

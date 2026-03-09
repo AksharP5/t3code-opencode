@@ -34,6 +34,7 @@ import type {
   OpenCodeEvent,
   OpenCodeGetSessionInput,
   OpenCodeListAgentsInput,
+  OpenCodeListMcpServersInput,
   OpenCodeListProviderAuthMethodsInput,
   OpenCodeListPermissionsInput,
   OpenCodeListQuestionsInput,
@@ -47,13 +48,20 @@ import type {
   OpenCodeProject,
   OpenCodeProviderAuthMethod,
   OpenCodeProviderAuthorization,
+  OpenCodeMcpAuthStartResult,
+  OpenCodeMcpStatus,
   OpenCodeReplyPermissionInput,
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
   OpenCodeRevertSessionInput,
   OpenCodeAuthorizeProviderInput,
+  OpenCodeAuthenticateMcpInput,
+  OpenCodeCompleteMcpAuthInput,
   OpenCodeCompleteProviderAuthInput,
+  OpenCodeConnectMcpInput,
+  OpenCodeDisconnectMcpInput,
   OpenCodeRemoveProviderAuthInput,
+  OpenCodeRemoveMcpAuthInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeSessionStatusMap,
@@ -62,6 +70,7 @@ import type {
   OpenCodeTodo,
   OpenCodeShareSessionInput,
   OpenCodeSetProviderApiKeyInput,
+  OpenCodeStartMcpAuthInput,
   OpenCodeUnrevertSessionInput,
   OpenCodeUnshareSessionInput,
   OpenCodeUpdateSessionInput,
@@ -200,6 +209,7 @@ export interface NativeApi {
     ensureServer: (input: OpenCodeListProjectsInput) => Promise<OpenCodeStatus>;
     listProviders: (input: OpenCodeListProvidersInput) => Promise<OpenCodeProviderCatalog>;
     listProviderAuthMethods: (input: OpenCodeListProviderAuthMethodsInput) => Promise<Record<string, OpenCodeProviderAuthMethod[]>>;
+    listMcpServers: (input: OpenCodeListMcpServersInput) => Promise<Record<string, OpenCodeMcpStatus>>;
     listAgents: (input: OpenCodeListAgentsInput) => Promise<OpenCodeAgent[]>;
     listProjects: (input: OpenCodeListProjectsInput) => Promise<OpenCodeProject[]>;
     listSessions: (input: OpenCodeListSessionsInput) => Promise<OpenCodeSessionSummary[]>;
@@ -218,6 +228,12 @@ export interface NativeApi {
     removeProviderAuth: (input: OpenCodeRemoveProviderAuthInput) => Promise<boolean>;
     authorizeProvider: (input: OpenCodeAuthorizeProviderInput) => Promise<OpenCodeProviderAuthorization | null>;
     completeProviderAuth: (input: OpenCodeCompleteProviderAuthInput) => Promise<boolean>;
+    startMcpAuth: (input: OpenCodeStartMcpAuthInput) => Promise<OpenCodeMcpAuthStartResult>;
+    completeMcpAuth: (input: OpenCodeCompleteMcpAuthInput) => Promise<OpenCodeMcpStatus>;
+    authenticateMcp: (input: OpenCodeAuthenticateMcpInput) => Promise<OpenCodeMcpStatus>;
+    removeMcpAuth: (input: OpenCodeRemoveMcpAuthInput) => Promise<boolean>;
+    connectMcp: (input: OpenCodeConnectMcpInput) => Promise<boolean>;
+    disconnectMcp: (input: OpenCodeDisconnectMcpInput) => Promise<boolean>;
     shareSession: (input: OpenCodeShareSessionInput) => Promise<OpenCodeSession>;
     unshareSession: (input: OpenCodeUnshareSessionInput) => Promise<OpenCodeSession>;
     unrevertSession: (input: OpenCodeUnrevertSessionInput) => Promise<OpenCodeSession>;

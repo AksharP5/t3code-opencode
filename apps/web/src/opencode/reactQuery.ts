@@ -5,6 +5,7 @@ import type {
   OpenCodeGetSessionInput,
   OpenCodeGetTodoInput,
   OpenCodeListAgentsInput,
+  OpenCodeListMcpServersInput,
   OpenCodeListProviderAuthMethodsInput,
   OpenCodeListPermissionsInput,
   OpenCodeListQuestionsInput,
@@ -19,6 +20,7 @@ export const opencodeQueryKeys = {
   status: (input: OpenCodeListProjectsInput) => ["opencode", "status", input] as const,
   providers: (input: OpenCodeListProvidersInput) => ["opencode", "providers", input] as const,
   providerAuthMethods: (input: OpenCodeListProviderAuthMethodsInput) => ["opencode", "providerAuthMethods", input] as const,
+  mcpServers: (input: OpenCodeListMcpServersInput) => ["opencode", "mcpServers", input] as const,
   agents: (input: OpenCodeListAgentsInput) => ["opencode", "agents", input] as const,
   projects: (input: OpenCodeListProjectsInput) => ["opencode", "projects", input] as const,
   sessions: (input: OpenCodeListSessionsInput) => ["opencode", "sessions", input] as const,
@@ -75,6 +77,16 @@ export function opencodeProviderAuthMethodsQueryOptions(input: OpenCodeListProvi
     queryFn: async () => ensureNativeApi().opencode.listProviderAuthMethods(input),
     staleTime: 30_000,
     refetchOnReconnect: true,
+  });
+}
+
+export function opencodeMcpServersQueryOptions(input: OpenCodeListMcpServersInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.mcpServers(input),
+    queryFn: async () => ensureNativeApi().opencode.listMcpServers(input),
+    staleTime: 5_000,
+    refetchOnReconnect: true,
+    refetchInterval: 5_000,
   });
 }
 

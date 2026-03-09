@@ -3,6 +3,7 @@ import {
   createOpenCodeSession,
   authorizeOpenCodeProvider,
   completeOpenCodeProviderAuth,
+  connectOpenCodeMcp,
   fetchOpenCodeHealth,
   getOpenCodeDiff,
   forkOpenCodeSession,
@@ -10,13 +11,19 @@ import {
   getOpenCodeTodo,
   getOpenCodeVcs,
   listOpenCodeProviderAuthMethods,
+  listOpenCodeMcpServers,
   removeOpenCodeProviderAuth,
+  removeOpenCodeMcpAuth,
   replyOpenCodePermission,
   replyOpenCodeQuestion,
   revertOpenCodeSession,
   sendOpenCodeMessage,
   setOpenCodeProviderApiKey,
   shareOpenCodeSession,
+  startOpenCodeMcpAuth,
+  completeOpenCodeMcpAuth,
+  authenticateOpenCodeMcp,
+  disconnectOpenCodeMcp,
   unshareOpenCodeSession,
   unrevertOpenCodeSession,
   updateOpenCodeSession,
@@ -402,6 +409,87 @@ describe("opencode client", () => {
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/provider/openai/auth");
     expect(call?.[1]?.method).toBe("DELETE");
+  });
+
+  it("loads MCP server statuses", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ github: { status: "needs_auth" } }),
+    } as Response);
+
+    await expect(listOpenCodeMcpServers(config)).resolves.toEqual({ github: { status: "needs_auth" } });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/mcp");
+  });
+
+  it("starts MCP oauth", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ authorizationUrl: "https://mcp.example/auth" }),
+    } as Response);
+
+    await expect(startOpenCodeMcpAuth({ ...config, serverName: "github" }, config)).resolves.toEqual({
+      authorizationUrl: "https://mcp.example/auth",
+    });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/mcp/github/auth");
+  });
+
+  it("completes MCP oauth", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "connected" }),
+    } as Response);
+
+    await expect(
+      completeOpenCodeMcpAuth({ ...config, serverName: "github", code: "oauth-code" }, config),
+    ).resolves.toEqual({ status: "connected" });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/mcp/github/auth/callback");
+    expect(call?.[1]?.body).toBe(JSON.stringify({ code: "oauth-code" }));
+  });
+
+  it("authenticates MCP servers", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "connected" }),
+    } as Response);
+
+    await expect(authenticateOpenCodeMcp({ ...config, serverName: "github" }, config)).resolves.toEqual({
+      status: "connected",
+    });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/mcp/github/auth/authenticate");
+  });
+
+  it("removes MCP auth", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    } as Response);
+
+    await expect(removeOpenCodeMcpAuth({ ...config, serverName: "github" }, config)).resolves.toBe(true);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/mcp/github/auth");
+    expect(call?.[1]?.method).toBe("DELETE");
+  });
+
+  it("connects and disconnects MCP servers", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({ ok: true, json: async () => true } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => true } as Response);
+
+    await expect(connectOpenCodeMcp({ ...config, serverName: "github" }, config)).resolves.toBe(true);
+    await expect(disconnectOpenCodeMcp({ ...config, serverName: "github" }, config)).resolves.toBe(true);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:4096/mcp/github/connect");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://127.0.0.1:4096/mcp/github/disconnect");
   });
 
   it("replies to OpenCode permission prompts", async () => {
