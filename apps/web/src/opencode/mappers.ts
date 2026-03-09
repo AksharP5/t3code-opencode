@@ -1,5 +1,6 @@
 import {
   DEFAULT_MODEL_BY_PROVIDER,
+  EventId,
   MessageId,
   type OpenCodeAgent,
   type OpenCodeMessage,
@@ -10,8 +11,11 @@ import {
   type OpenCodeRuntimeStatus,
   type OpenCodeSession,
   type OpenCodeSessionSummary,
+  type OrchestrationLatestTurn,
+  type OrchestrationThreadActivity,
   ProjectId,
   ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 import {
   DEFAULT_INTERACTION_MODE,
@@ -86,6 +90,7 @@ export function mapOpenCodeThreadSummary(input: {
   lastVisitedAt?: string | undefined;
   providerCatalog?: OpenCodeProviderCatalog | null | undefined;
   agentCatalog?: OpenCodeAgentCatalog | null | undefined;
+  activities?: OrchestrationThreadActivity[] | undefined;
 }): Thread {
   const provider = resolveThreadProvider({
     session: input.session,
@@ -122,12 +127,12 @@ export function mapOpenCodeThreadSummary(input: {
     proposedPlans: [],
     error: null,
     createdAt: toIso(input.session.time.created),
-    latestTurn: null,
+    latestTurn: resolveLatestTurn([], input.status),
     lastVisitedAt: input.lastVisitedAt,
     branch: null,
     worktreePath: resolveThreadWorktreePath({ session: input.session, projectCwd: input.projectCwd }),
     turnDiffSummaries: [],
-    activities: [],
+    activities: input.activities ?? [],
   };
 }
 
@@ -141,6 +146,7 @@ export function mapOpenCodeThreadDetail(input: {
   providerCatalog?: OpenCodeProviderCatalog | null | undefined;
   branch?: string | null | undefined;
   agentCatalog?: OpenCodeAgentCatalog | null | undefined;
+  activities?: OrchestrationThreadActivity[] | undefined;
 }): Thread {
   const summary = mapOpenCodeThreadSummary({
     session: input.session,
@@ -150,6 +156,7 @@ export function mapOpenCodeThreadDetail(input: {
     lastVisitedAt: input.lastVisitedAt,
     providerCatalog: input.providerCatalog,
     agentCatalog: input.agentCatalog,
+    activities: input.activities,
   });
   const model = resolveThreadModel({
     messages: input.messages,
@@ -167,6 +174,7 @@ export function mapOpenCodeThreadDetail(input: {
       provider: summary.session?.provider ?? "codex",
       model,
     }),
+    latestTurn: resolveLatestTurn(input.messages, input.status),
     session: summary.session
       ? {
           ...summary.session,
@@ -179,6 +187,168 @@ export function mapOpenCodeThreadDetail(input: {
       projectCwd: input.projectCwd,
       messages: input.messages,
     }),
+    activities: mergeOpenCodeActivities(input.messages, input.activities ?? []),
+  };
+}
+
+function resolveLatestTurn(
+  messages: OpenCodeMessage[],
+  status: OpenCodeRuntimeStatus | undefined,
+): OrchestrationLatestTurn | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || message.info.role !== "user") {
+      continue;
+    }
+
+    const assistant = messages
+      .slice(index + 1)
+      .find((candidate) => candidate.info.role === "assistant");
+    const requestedAt = toIso(message.info.time.created);
+    const startedAt = assistant
+      ? toIso(assistant.info.time.start ?? assistant.info.time.created)
+      : requestedAt;
+    const completedAt = assistant
+      ? toIso(assistant.info.time.completed ?? assistant.info.time.end ?? assistant.info.time.created)
+      : null;
+
+    if (status?.type === "busy" || status?.type === "retry") {
+      return {
+        turnId: TurnId.makeUnsafe(`opencode-turn-${message.info.id}`),
+        state: "running",
+        requestedAt,
+        startedAt,
+        completedAt: null,
+        assistantMessageId: assistant ? MessageId.makeUnsafe(assistant.info.id) : null,
+      };
+    }
+
+    if (!assistant) {
+      return {
+        turnId: TurnId.makeUnsafe(`opencode-turn-${message.info.id}`),
+        state: "interrupted",
+        requestedAt,
+        startedAt,
+        completedAt: startedAt,
+        assistantMessageId: null,
+      };
+    }
+
+    return {
+      turnId: TurnId.makeUnsafe(`opencode-turn-${message.info.id}`),
+      state: assistant.info.error ? "error" : "completed",
+      requestedAt,
+      startedAt,
+      completedAt,
+      assistantMessageId: MessageId.makeUnsafe(assistant.info.id),
+    };
+  }
+
+  return null;
+}
+
+function mergeOpenCodeActivities(
+  messages: OpenCodeMessage[],
+  overlayActivities: OrchestrationThreadActivity[],
+): OrchestrationThreadActivity[] {
+  const derived = deriveMessageActivities(messages);
+  const merged = new Map<string, OrchestrationThreadActivity>();
+  for (const activity of [...derived, ...overlayActivities]) {
+    merged.set(activity.id, activity);
+  }
+  return [...merged.values()].toSorted((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
+function deriveMessageActivities(messages: OpenCodeMessage[]): OrchestrationThreadActivity[] {
+  return messages.flatMap((message) => {
+    if (message.info.role !== "assistant") {
+      return [];
+    }
+    const turnId = resolveMessageTurnId(message);
+    const createdAt = toIso(
+      message.info.time.completed ?? message.info.time.end ?? message.info.time.created,
+    );
+    return message.parts.flatMap((part, index) => {
+      const activity = mapPartToActivity(part, message.info.id, index, createdAt, turnId);
+      return activity ? [activity] : [];
+    });
+  });
+}
+
+function mapPartToActivity(
+  part: OpenCodeMessagePart,
+  messageId: string,
+  index: number,
+  createdAt: string,
+  turnId: OrchestrationThreadActivity["turnId"],
+): OrchestrationThreadActivity | null {
+  const id = `opencode-activity-${messageId}-${part.id ?? part.callID ?? index}`;
+  if (part.type === "tool") {
+    return {
+      id: EventId.makeUnsafe(id),
+      tone: isToolError(part) ? "error" : "tool",
+      kind: "tool.completed",
+      summary: part.tool ? `Used ${part.tool}` : "Used tool",
+      payload: buildToolActivityPayload(part),
+      turnId,
+      createdAt,
+    } as OrchestrationThreadActivity;
+  }
+  if (part.type === "patch") {
+    return {
+      id: EventId.makeUnsafe(id),
+      tone: "tool",
+      kind: "patch.applied",
+      summary: "Applied patch",
+      payload: {
+        detail: "Applied changes to the workspace.",
+        data: part,
+      },
+      turnId,
+      createdAt,
+    } as OrchestrationThreadActivity;
+  }
+  if (part.type === "subtask") {
+    return {
+      id: EventId.makeUnsafe(id),
+      tone: "info",
+      kind: "task.completed",
+      summary: "Delegated subtask",
+      payload: {
+        detail: typeof part.metadata === "object" && part.metadata && "description" in part.metadata
+          ? (part.metadata as { description?: string }).description
+          : undefined,
+        data: part,
+      },
+      turnId,
+      createdAt,
+    } as OrchestrationThreadActivity;
+  }
+  return null;
+}
+
+function resolveMessageTurnId(message: OpenCodeMessage): OrchestrationThreadActivity["turnId"] {
+  const sourceId = message.info.parentID ?? message.info.id;
+  return TurnId.makeUnsafe(`opencode-turn-${sourceId}`);
+}
+
+function isToolError(part: OpenCodeMessagePart): boolean {
+  if (!part.state || typeof part.state !== "object") {
+    return false;
+  }
+  return (part.state as { status?: string }).status === "error";
+}
+
+function buildToolActivityPayload(part: OpenCodeMessagePart): Record<string, unknown> {
+  const state = part.state && typeof part.state === "object" ? (part.state as Record<string, unknown>) : null;
+  return {
+    detail: typeof state?.title === "string" ? state.title : undefined,
+    data: {
+      item: {
+        command: typeof state?.command === "string" ? state.command : part.tool,
+        result: state,
+      },
+    },
   };
 }
 
@@ -363,7 +533,7 @@ function resolveThreadCapabilities(input: {
     model: input.model,
   });
   return {
-    branchSelection: false,
+    branchSelection: true,
     composerImages:
       model?.capabilities.attachment === true && model.capabilities.input.image === true,
     diff: true,
@@ -412,6 +582,9 @@ function resolveThreadWorktreePath(input: {
   projectCwd?: string | undefined;
   messages?: OpenCodeMessage[] | undefined;
 }): string | null {
+  if (typeof input.session.directory === "string" && input.session.directory.trim().length > 0) {
+    return input.session.directory;
+  }
   for (let index = (input.messages?.length ?? 0) - 1; index >= 0; index -= 1) {
     const message = input.messages?.[index];
     const root = message?.info.path?.root;

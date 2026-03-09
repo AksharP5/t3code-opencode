@@ -169,7 +169,7 @@ describe("OpenCode mappers", () => {
     expect(thread.runtimeMode).toBe("approval-required");
     expect(thread.worktreePath).toBe("/tmp/project-a");
     expect(thread.capabilities).toMatchObject({
-      branchSelection: false,
+      branchSelection: true,
       composerImages: true,
       diff: true,
       interrupt: true,
@@ -195,7 +195,7 @@ describe("OpenCode mappers", () => {
 
   it("derives plan mode from the latest OpenCode agent turn", () => {
     const thread = mapOpenCodeThreadDetail({
-      session: makeSessionSummary() as OpenCodeSession,
+      session: makeSessionSummary({ directory: "/tmp/project-a/worktree-a" }) as OpenCodeSession,
       messages: [
         makeMessage({
           info: {
@@ -217,6 +217,40 @@ describe("OpenCode mappers", () => {
 
     expect(thread.interactionMode).toBe("plan");
     expect(thread.capabilities.planMode).toBe(true);
+    expect(thread.worktreePath).toBe("/tmp/project-a/worktree-a");
+  });
+
+  it("synthesizes latest turn state from OpenCode messages", () => {
+    const thread = mapOpenCodeThreadDetail({
+      session: makeSessionSummary({ directory: "/tmp/project-a/worktree-a" }) as OpenCodeSession,
+      messages: [
+        makeMessage({
+          info: {
+            id: "message-user",
+            sessionID: "session-1",
+            role: "user",
+            time: { created: 1 },
+          },
+        }),
+        makeMessage({
+          info: {
+            id: "message-assistant",
+            sessionID: "session-1",
+            role: "assistant",
+            time: { created: 2, start: 2, completed: 3 },
+          },
+        }),
+      ],
+      projectId: "project-1",
+      status: { type: "idle" },
+      providerCatalog: makeProviderCatalog(),
+      agentCatalog: buildOpenCodeAgentCatalog(makeAgents()),
+    });
+
+    expect(thread.latestTurn).toMatchObject({
+      state: "completed",
+      assistantMessageId: "message-assistant",
+    });
   });
 
   it("renders assistant tool-only messages into readable fallback text", () => {

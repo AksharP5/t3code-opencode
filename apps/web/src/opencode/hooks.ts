@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ThreadId } from "@t3tools/contracts";
 import { buildOpenCodeServerConfigInput, useAppSettings } from "../appSettings";
 import type { Project, Thread } from "../types";
+import { useOpenCodeEventActivityStore } from "./eventActivityStore";
 import {
   buildOpenCodeAgentCatalog,
   mapOpenCodeProjects,
@@ -30,6 +31,7 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
   const config = useMemo(() => buildOpenCodeServerConfigInput(settings), [settings]);
   const lastVisitedAtByThreadId = useOpenCodeOverlayStore((store) => store.lastVisitedAtByThreadId);
   const scriptsByProjectCwd = useOpenCodeProjectOverlayStore((store) => store.scriptsByProjectCwd);
+  const activitiesByThreadId = useOpenCodeEventActivityStore((store) => store.activitiesByThreadId);
   const statusQuery = useQuery({
     ...opencodeStatusQueryOptions(config),
     enabled: true,
@@ -93,9 +95,18 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
           lastVisitedAt: lastVisitedAtByThreadId[ThreadId.makeUnsafe(session.id)],
           providerCatalog: providersQuery.data,
           agentCatalog,
+          activities: activitiesByThreadId[ThreadId.makeUnsafe(session.id)] ?? [],
         }),
       );
-  }, [agentCatalog, lastVisitedAtByThreadId, projects, providersQuery.data, sessionsQuery.data, statusesQuery.data]);
+  }, [
+    activitiesByThreadId,
+    agentCatalog,
+    lastVisitedAtByThreadId,
+    projects,
+    providersQuery.data,
+    sessionsQuery.data,
+    statusesQuery.data,
+  ]);
 
   const activeProjectId = useMemo(() => {
     if (!sessionQuery.data) {
@@ -108,10 +119,17 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     () => (activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null),
     [activeProjectId, projects],
   );
+  const activeSessionDirectory = useMemo(() => {
+    if (sessionQuery.data?.directory) {
+      return sessionQuery.data.directory;
+    }
+    const summaryThread = threadId ? threads.find((thread) => thread.id === threadId) : null;
+    return summaryThread?.worktreePath ?? activeProject?.cwd ?? null;
+  }, [activeProject?.cwd, sessionQuery.data?.directory, threadId, threads]);
 
   const vcsQuery = useQuery({
-    ...opencodeVcsQueryOptions({ ...config, directory: activeProject?.cwd ?? "missing" }),
-    enabled: statusQuery.data?.healthy === true && activeProject?.cwd !== undefined,
+    ...opencodeVcsQueryOptions({ ...config, directory: activeSessionDirectory ?? "missing" }),
+    enabled: statusQuery.data?.healthy === true && activeSessionDirectory !== null,
   });
 
   const activeThread = useMemo(() => {
@@ -126,16 +144,19 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
       session: sessionQuery.data,
       messages: messagesQuery.data,
       projectId: resolveProjectIdForSession(sessionQuery.data, projects),
-      projectCwd: activeProject?.cwd ?? undefined,
+      projectCwd: activeSessionDirectory ?? activeProject?.cwd ?? undefined,
       status: statusesQuery.data?.[sessionQuery.data.id],
       lastVisitedAt: lastVisitedAtByThreadId[ThreadId.makeUnsafe(sessionQuery.data.id)],
       providerCatalog: providersQuery.data,
       branch: vcsQuery.data?.branch ?? null,
       agentCatalog,
+      activities: activitiesByThreadId[ThreadId.makeUnsafe(sessionQuery.data.id)] ?? [],
     });
   }, [
+    activitiesByThreadId,
     agentCatalog,
     activeProject?.cwd,
+    activeSessionDirectory,
     lastVisitedAtByThreadId,
     messagesQuery.data,
     projects,
