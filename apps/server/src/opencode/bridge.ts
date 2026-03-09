@@ -18,6 +18,7 @@ import type {
   OpenCodeReplyPermissionInput,
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
+  OpenCodeRevertSessionInput,
   OpenCodeSendMessageInput,
   OpenCodeStatus,
   OpenCodeUpdateSessionInput,
@@ -43,6 +44,7 @@ import {
   replyOpenCodePermission,
   replyOpenCodeQuestion,
   rejectOpenCodeQuestion,
+  revertOpenCodeSession,
   sendOpenCodeMessage,
   streamOpenCodeEvents,
   updateOpenCodeSession,
@@ -188,6 +190,11 @@ export class OpenCodeBridge {
   async rejectQuestion(input: OpenCodeRejectQuestionInput) {
     const config = await this.ensureReady(input);
     return rejectOpenCodeQuestion(input, config);
+  }
+
+  async revertSession(input: OpenCodeRevertSessionInput) {
+    const config = await this.ensureReady(input);
+    return revertOpenCodeSession(input, config);
   }
 
   async getVcs(input: OpenCodeGetVcsInput) {

@@ -9,6 +9,7 @@ import {
   getOpenCodeVcs,
   replyOpenCodePermission,
   replyOpenCodeQuestion,
+  revertOpenCodeSession,
   sendOpenCodeMessage,
   updateOpenCodeSession,
 } from "./client";
@@ -351,6 +352,31 @@ describe("opencode client", () => {
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/question/question-1/reply");
     expect(call?.[1]?.body).toBe(JSON.stringify({ answers: [["Yes"]] }));
+  });
+
+  it("reverts OpenCode sessions to a message", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "session-1",
+        directory: "/tmp/project-a",
+        title: "Build feature",
+        time: { created: 1, updated: 2 },
+      }),
+    } as Response);
+
+    await revertOpenCodeSession(
+      {
+        ...config,
+        sessionId: "session-1",
+        messageId: "message-1",
+      },
+      config,
+    );
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/revert");
+    expect(call?.[1]?.body).toBe(JSON.stringify({ messageID: "message-1" }));
   });
 
   it("loads VCS info for the requested directory", async () => {

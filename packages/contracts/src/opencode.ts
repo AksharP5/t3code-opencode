@@ -499,6 +499,14 @@ export const OpenCodeRejectQuestionInput = Schema.Struct({
 });
 export type OpenCodeRejectQuestionInput = typeof OpenCodeRejectQuestionInput.Type;
 
+export const OpenCodeRevertSessionInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  sessionId: OpenCodeIdentifier,
+  messageId: OpenCodeIdentifier,
+  partId: Schema.optional(OpenCodeIdentifier),
+});
+export type OpenCodeRevertSessionInput = typeof OpenCodeRevertSessionInput.Type;
+
 export const OpenCodeDeleteSessionInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,
   sessionId: OpenCodeIdentifier,

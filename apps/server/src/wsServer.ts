@@ -1084,6 +1084,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeRevertSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.revertSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to revert OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeGetVcs: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({

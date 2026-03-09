@@ -15,6 +15,7 @@ import type {
   OpenCodeReplyPermissionInput,
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
+  OpenCodeRevertSessionInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeSessionStatusMap,
@@ -283,6 +284,27 @@ export async function rejectOpenCodeQuestion(
     throw new Error(`OpenCode question rejection failed with ${response.status}.`);
   }
   return (await response.json()) === true;
+}
+
+export async function revertOpenCodeSession(
+  input: OpenCodeRevertSessionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeSession> {
+  const response = await fetch(
+    `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/revert`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify({
+        messageID: input.messageId,
+        ...(input.partId ? { partID: input.partId } : {}),
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode session revert failed with ${response.status}.`);
+  }
+  return decodeSession(await response.json());
 }
 
 export async function getOpenCodeVcs(

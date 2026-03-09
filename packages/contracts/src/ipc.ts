@@ -47,6 +47,7 @@ import type {
   OpenCodeReplyPermissionInput,
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
+  OpenCodeRevertSessionInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeSessionStatusMap,
@@ -201,6 +202,7 @@ export interface NativeApi {
     replyPermission: (input: OpenCodeReplyPermissionInput) => Promise<boolean>;
     replyQuestion: (input: OpenCodeReplyQuestionInput) => Promise<boolean>;
     rejectQuestion: (input: OpenCodeRejectQuestionInput) => Promise<boolean>;
+    revertSession: (input: OpenCodeRevertSessionInput) => Promise<OpenCodeSession>;
     getVcs: (input: OpenCodeGetVcsInput) => Promise<OpenCodeVcsInfo>;
     createSession: (input: OpenCodeCreateSessionInput) => Promise<OpenCodeSession>;
     sendMessage: (input: OpenCodeSendMessageInput) => Promise<OpenCodeMessage | null>;

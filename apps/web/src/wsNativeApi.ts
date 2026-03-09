@@ -204,6 +204,7 @@ export function createWsNativeApi(): NativeApi {
       replyPermission: (input) => transport.request(WS_METHODS.opencodeReplyPermission, input),
       replyQuestion: (input) => transport.request(WS_METHODS.opencodeReplyQuestion, input),
       rejectQuestion: (input) => transport.request(WS_METHODS.opencodeRejectQuestion, input),
+      revertSession: (input) => transport.request(WS_METHODS.opencodeRevertSession, input),
       getVcs: (input) => transport.request(WS_METHODS.opencodeGetVcs, input),
       createSession: (input) => transport.request(WS_METHODS.opencodeCreateSession, input),
       sendMessage: (input) => transport.request(WS_METHODS.opencodeSendMessage, input),

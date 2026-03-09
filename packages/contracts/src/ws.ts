@@ -49,6 +49,7 @@ import {
   OpenCodeReplyPermissionInput,
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
+  OpenCodeRevertSessionInput,
   OpenCodeSendMessageInput,
   OpenCodeUpdateSessionInput,
 } from "./opencode";
@@ -106,6 +107,7 @@ export const WS_METHODS = {
   opencodeReplyPermission: "opencode.replyPermission",
   opencodeReplyQuestion: "opencode.replyQuestion",
   opencodeRejectQuestion: "opencode.rejectQuestion",
+  opencodeRevertSession: "opencode.revertSession",
   opencodeGetVcs: "opencode.getVcs",
   opencodeCreateSession: "opencode.createSession",
   opencodeSendMessage: "opencode.sendMessage",
@@ -194,6 +196,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.opencodeReplyPermission, OpenCodeReplyPermissionInput),
   tagRequestBody(WS_METHODS.opencodeReplyQuestion, OpenCodeReplyQuestionInput),
   tagRequestBody(WS_METHODS.opencodeRejectQuestion, OpenCodeRejectQuestionInput),
+  tagRequestBody(WS_METHODS.opencodeRevertSession, OpenCodeRevertSessionInput),
   tagRequestBody(WS_METHODS.opencodeGetVcs, OpenCodeGetVcsInput),
   tagRequestBody(WS_METHODS.opencodeCreateSession, OpenCodeCreateSessionInput),
   tagRequestBody(WS_METHODS.opencodeSendMessage, OpenCodeSendMessageInput),

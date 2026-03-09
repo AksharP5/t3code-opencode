@@ -3974,6 +3974,43 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [navigate, threadId],
   );
   const onRevertUserMessage = (messageId: MessageId) => {
+    if (isOpenCodeThread && activeThread) {
+      const api = readNativeApi();
+      if (!api) {
+        return;
+      }
+      if (phase === "running" || isSendBusy || isConnecting) {
+        setThreadError(activeThread.id, "Interrupt the current turn before reverting session state.");
+        return;
+      }
+      void (async () => {
+        const confirmed = await api.dialogs.confirm(
+          [
+            "Revert this OpenCode turn?",
+            "This will undo work produced after the selected message in the canonical OpenCode session.",
+            "This action cannot be undone.",
+          ].join("\n"),
+        );
+        if (!confirmed) {
+          return;
+        }
+        setThreadError(activeThread.id, null);
+        await api.opencode
+          .revertSession({
+            ...openCodeConfig,
+            sessionId: activeThread.id,
+            messageId,
+          })
+          .catch((err: unknown) => {
+            setThreadError(
+              activeThread.id,
+              err instanceof Error ? err.message : "Failed to revert session state.",
+            );
+          });
+      })();
+      return;
+    }
+
     const targetTurnCount = revertTurnCountByUserMessageId.get(messageId);
     if (typeof targetTurnCount !== "number") {
       return;
@@ -4116,6 +4153,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
           turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
           nowIso={nowIso}
           expandedWorkGroups={expandedWorkGroups}
+          allowSourceMessageRevert={isOpenCodeThread}
           onToggleWorkGroup={onToggleWorkGroup}
           onOpenTurnDiff={onOpenTurnDiff}
           revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
@@ -5547,6 +5585,7 @@ interface MessagesTimelineProps {
   turnDiffSummaryByAssistantMessageId: Map<MessageId, TurnDiffSummary>;
   nowIso: string;
   expandedWorkGroups: Record<string, boolean>;
+  allowSourceMessageRevert: boolean;
   onToggleWorkGroup: (groupId: string) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
@@ -5601,6 +5640,7 @@ const MessagesTimeline = memo(function MessagesTimeline({
   turnDiffSummaryByAssistantMessageId,
   nowIso,
   expandedWorkGroups,
+  allowSourceMessageRevert,
   onToggleWorkGroup,
   onOpenTurnDiff,
   revertTurnCountByUserMessageId,
@@ -5898,7 +5938,8 @@ const MessagesTimeline = memo(function MessagesTimeline({
         row.message.role === "user" &&
         (() => {
           const userImages = row.message.attachments ?? [];
-          const canRevertAgentWork = revertTurnCountByUserMessageId.has(row.message.id);
+          const canRevertAgentWork =
+            allowSourceMessageRevert || revertTurnCountByUserMessageId.has(row.message.id);
           return (
             <div className="flex justify-end">
               <div className="group relative max-w-[80%] rounded-2xl rounded-br-sm border border-border bg-secondary px-4 py-3">
