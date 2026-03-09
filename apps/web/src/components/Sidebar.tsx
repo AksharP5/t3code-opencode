@@ -122,6 +122,44 @@ function threadActivityTimestamp(thread: Thread): number {
 
   return 0;
 }
+
+function compareThreadsByActivity(left: Thread, right: Thread): number {
+  const byDate = threadActivityTimestamp(right) - threadActivityTimestamp(left);
+  if (byDate !== 0) {
+    return byDate;
+  }
+  return right.id.localeCompare(left.id);
+}
+
+function orderProjectThreads(threads: Thread[]): Thread[] {
+  const byId = new Map(threads.map((thread) => [thread.id, thread] as const));
+  const childrenByParentId = new Map<ThreadId, Thread[]>();
+  const roots: Thread[] = [];
+
+  for (const thread of threads) {
+    const parentId = thread.parentThreadId ?? null;
+    if (!parentId || !byId.has(parentId)) {
+      roots.push(thread);
+      continue;
+    }
+    const children = childrenByParentId.get(parentId) ?? [];
+    children.push(thread);
+    childrenByParentId.set(parentId, children);
+  }
+
+  const ordered: Thread[] = [];
+  const visit = (thread: Thread) => {
+    ordered.push(thread);
+    const children = childrenByParentId.get(thread.id);
+    if (!children) {
+      return;
+    }
+    children.toSorted(compareThreadsByActivity).forEach(visit);
+  };
+
+  roots.toSorted(compareThreadsByActivity).forEach(visit);
+  return ordered;
+}
 function terminalStatusFromRunningIds(
   runningTerminalIds: string[],
 ): TerminalStatusIndicator | null {
@@ -1054,19 +1092,15 @@ export default function Sidebar() {
           <SidebarMenu>
             {sortedVisibleProjects.map((project) => {
               const projectThreads = visibleThreads
-                .filter((thread) => thread.projectId === project.id)
-                .toSorted((a, b) => {
-                  const byDate = threadActivityTimestamp(b) - threadActivityTimestamp(a);
-                  if (byDate !== 0) return byDate;
-                  return b.id.localeCompare(a.id);
-                });
+                .filter((thread) => thread.projectId === project.id);
+              const orderedProjectThreads = orderProjectThreads(projectThreads);
               const projectExpanded = openCodeExpandedProjectIds.has(project.id);
               const isThreadListExpanded = expandedThreadListsByProject.has(project.id);
               const hasHiddenThreads = projectThreads.length > THREAD_PREVIEW_LIMIT;
               const visibleProjectThreads =
                 hasHiddenThreads && !isThreadListExpanded
-                  ? projectThreads.slice(0, THREAD_PREVIEW_LIMIT)
-                  : projectThreads;
+                  ? orderedProjectThreads.slice(0, THREAD_PREVIEW_LIMIT)
+                  : orderedProjectThreads;
 
               return (
                 <Collapsible
@@ -1163,11 +1197,11 @@ export default function Sidebar() {
                                 render={<div role="button" tabIndex={0} />}
                                 size="sm"
                                 isActive={isActive}
-                                className={`h-7 w-full translate-x-0 cursor-default justify-start px-2 text-left hover:bg-accent hover:text-foreground ${
+                                className={`h-7 w-full translate-x-0 cursor-default justify-start text-left hover:bg-accent hover:text-foreground ${
                                   isActive
                                     ? "bg-accent/85 text-foreground font-medium ring-1 ring-border/70 dark:bg-accent/55 dark:ring-border/50"
                                     : "text-muted-foreground"
-                                }`}
+                                } ${thread.parentThreadId ? "pl-5 pr-2" : "px-2"}`}
                                 onClick={() => {
                                   void navigate({
                                     to: "/$threadId",

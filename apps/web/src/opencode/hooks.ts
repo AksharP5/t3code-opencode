@@ -52,7 +52,7 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     enabled: statusQuery.data?.healthy === true,
   });
   const sessionsQuery = useQuery({
-    ...opencodeSessionsQueryOptions({ ...config, roots: true, limit: 200 }),
+    ...opencodeSessionsQueryOptions({ ...config, limit: 200 }),
     enabled: statusQuery.data?.healthy === true,
   });
   const statusesQuery = useQuery({

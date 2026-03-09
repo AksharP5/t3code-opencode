@@ -130,6 +130,8 @@ export function mapOpenCodeThreadSummary(input: {
     createdAt: toIso(input.session.time.created),
     latestTurn: resolveLatestTurn([], input.status),
     lastVisitedAt: input.lastVisitedAt,
+    parentThreadId: input.session.parentID ? ThreadId.makeUnsafe(input.session.parentID) : null,
+    workspaceId: input.session.workspaceID ?? null,
     branch: null,
     worktreePath: resolveThreadWorktreePath({ session: input.session, projectCwd: input.projectCwd }),
     turnDiffSummaries: [],
@@ -190,6 +192,8 @@ export function mapOpenCodeThreadDetail(input: {
       messages: input.messages,
     }),
     activities: mergeOpenCodeActivities(input.messages, input.activities ?? []),
+    parentThreadId: input.session.parentID ? ThreadId.makeUnsafe(input.session.parentID) : null,
+    workspaceId: input.session.workspaceID ?? null,
   };
 }
 

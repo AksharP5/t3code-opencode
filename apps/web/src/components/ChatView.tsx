@@ -452,6 +452,8 @@ function buildLocalDraftThread(
     createdAt: draftThread.createdAt,
     latestTurn: null,
     lastVisitedAt: draftThread.createdAt,
+    parentThreadId: draftThread.forkSessionId ?? null,
+    workspaceId: null,
     branch: draftThread.branch,
     worktreePath: draftThread.worktreePath,
     turnDiffSummaries: [],

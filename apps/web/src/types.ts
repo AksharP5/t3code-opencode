@@ -113,6 +113,8 @@ export interface Thread {
   createdAt: string;
   latestTurn: OrchestrationLatestTurn | null;
   lastVisitedAt?: string | undefined;
+  parentThreadId?: ThreadId | null | undefined;
+  workspaceId?: string | null | undefined;
   branch: string | null;
   worktreePath: string | null;
   turnDiffSummaries: TurnDiffSummary[];
