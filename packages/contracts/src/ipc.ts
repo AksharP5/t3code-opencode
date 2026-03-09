@@ -24,17 +24,29 @@ import type { ServerConfig } from "./server";
 import type {
   OpenCodeAbortSessionInput,
   OpenCodeCreateSessionInput,
+  OpenCodeDeleteSessionInput,
+  OpenCodeForkSessionInput,
+  OpenCodeAgent,
+  OpenCodeGetVcsInput,
   OpenCodeEvent,
   OpenCodeGetSessionInput,
+  OpenCodeListAgentsInput,
+  OpenCodeListPermissionsInput,
+  OpenCodeListProvidersInput,
   OpenCodeListProjectsInput,
   OpenCodeListSessionsInput,
   OpenCodeMessage,
+  OpenCodePermissionRequest,
+  OpenCodeProviderCatalog,
   OpenCodeProject,
+  OpenCodeReplyPermissionInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeSessionStatusMap,
   OpenCodeSessionSummary,
   OpenCodeStatus,
+  OpenCodeUpdateSessionInput,
+  OpenCodeVcsInfo,
 } from "./opencode";
 import type {
   TerminalClearInput,
@@ -156,14 +168,22 @@ export interface NativeApi {
   opencode: {
     getStatus: (input: OpenCodeListProjectsInput) => Promise<OpenCodeStatus>;
     ensureServer: (input: OpenCodeListProjectsInput) => Promise<OpenCodeStatus>;
+    listProviders: (input: OpenCodeListProvidersInput) => Promise<OpenCodeProviderCatalog>;
+    listAgents: (input: OpenCodeListAgentsInput) => Promise<OpenCodeAgent[]>;
     listProjects: (input: OpenCodeListProjectsInput) => Promise<OpenCodeProject[]>;
     listSessions: (input: OpenCodeListSessionsInput) => Promise<OpenCodeSessionSummary[]>;
     getSession: (input: OpenCodeGetSessionInput) => Promise<OpenCodeSession>;
     getMessages: (input: OpenCodeGetSessionInput) => Promise<OpenCodeMessage[]>;
     getStatuses: (input: OpenCodeListProjectsInput) => Promise<OpenCodeSessionStatusMap>;
+    listPermissions: (input: OpenCodeListPermissionsInput) => Promise<OpenCodePermissionRequest[]>;
+    replyPermission: (input: OpenCodeReplyPermissionInput) => Promise<boolean>;
+    getVcs: (input: OpenCodeGetVcsInput) => Promise<OpenCodeVcsInfo>;
     createSession: (input: OpenCodeCreateSessionInput) => Promise<OpenCodeSession>;
     sendMessage: (input: OpenCodeSendMessageInput) => Promise<OpenCodeMessage | null>;
     abortSession: (input: OpenCodeAbortSessionInput) => Promise<boolean>;
+    updateSession: (input: OpenCodeUpdateSessionInput) => Promise<OpenCodeSession>;
+    deleteSession: (input: OpenCodeDeleteSessionInput) => Promise<boolean>;
+    forkSession: (input: OpenCodeForkSessionInput) => Promise<OpenCodeSession>;
     onEvent: (callback: (event: OpenCodeEvent) => void) => () => void;
   };
   orchestration: {

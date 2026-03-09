@@ -1,31 +1,48 @@
 import type {
+  OpenCodeAgent,
+  OpenCodeDeleteSessionInput,
+  OpenCodeForkSessionInput,
   OpenCodeCreateSessionInput,
   OpenCodeEvent,
+  OpenCodeGetVcsInput,
   OpenCodeMessage,
+  OpenCodePermissionRequest,
+  OpenCodeProviderCatalog,
+  OpenCodeReplyPermissionInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeSessionStatusMap,
   OpenCodeSessionSummary,
   OpenCodeStatus,
   OpenCodeProject,
+  OpenCodeUpdateSessionInput,
+  OpenCodeVcsInfo,
 } from "@t3tools/contracts";
 import {
+  OpenCodeAgent as OpenCodeAgentSchema,
   OpenCodeEvent as OpenCodeEventSchema,
   OpenCodeMessage as OpenCodeMessageSchema,
+  OpenCodePermissionRequest as OpenCodePermissionRequestSchema,
+  OpenCodeProviderCatalog as OpenCodeProviderCatalogSchema,
   OpenCodeProject as OpenCodeProjectSchema,
   OpenCodeSession as OpenCodeSessionSchema,
   OpenCodeSessionStatusMap as OpenCodeSessionStatusMapSchema,
   OpenCodeSessionSummary as OpenCodeSessionSummarySchema,
+  OpenCodeVcsInfo as OpenCodeVcsInfoSchema,
 } from "@t3tools/contracts";
 import { Schema } from "effect";
 import { getOpenCodeAuthHeader, type ResolvedOpenCodeConfig } from "./config";
 
 const decodeProjects = Schema.decodeUnknownSync(Schema.Array(OpenCodeProjectSchema));
+const decodeAgents = Schema.decodeUnknownSync(Schema.Array(OpenCodeAgentSchema));
+const decodeProviderCatalog = Schema.decodeUnknownSync(OpenCodeProviderCatalogSchema);
 const decodeSessions = Schema.decodeUnknownSync(Schema.Array(OpenCodeSessionSummarySchema));
 const decodeSession = Schema.decodeUnknownSync(OpenCodeSessionSchema);
 const decodeMessages = Schema.decodeUnknownSync(Schema.Array(OpenCodeMessageSchema));
 const decodeStatuses = Schema.decodeUnknownSync(OpenCodeSessionStatusMapSchema);
+const decodePermissions = Schema.decodeUnknownSync(Schema.Array(OpenCodePermissionRequestSchema));
 const decodeEvent = Schema.decodeUnknownSync(OpenCodeEventSchema);
+const decodeVcsInfo = Schema.decodeUnknownSync(OpenCodeVcsInfoSchema);
 
 export async function fetchOpenCodeHealth(config: ResolvedOpenCodeConfig): Promise<OpenCodeStatus> {
   const response = await fetch(`${config.baseUrl}/global/health`, {
@@ -52,6 +69,28 @@ export async function listOpenCodeProjects(config: ResolvedOpenCodeConfig): Prom
     throw new Error(`OpenCode project list failed with ${response.status}.`);
   }
   return Array.from(decodeProjects(await response.json()));
+}
+
+export async function listOpenCodeProviders(
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeProviderCatalog> {
+  const response = await fetch(`${config.baseUrl}/provider`, {
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode provider list failed with ${response.status}.`);
+  }
+  return decodeProviderCatalog(await response.json());
+}
+
+export async function listOpenCodeAgents(config: ResolvedOpenCodeConfig): Promise<OpenCodeAgent[]> {
+  const response = await fetch(`${config.baseUrl}/agent`, {
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode agent list failed with ${response.status}.`);
+  }
+  return Array.from(decodeAgents(await response.json()));
 }
 
 export async function listOpenCodeSessions(input: {
@@ -121,6 +160,52 @@ export async function getOpenCodeStatuses(
   return decodeStatuses(await response.json());
 }
 
+export async function listOpenCodePermissions(
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodePermissionRequest[]> {
+  const response = await fetch(`${config.baseUrl}/permission`, {
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode permission list failed with ${response.status}.`);
+  }
+  return Array.from(decodePermissions(await response.json()));
+}
+
+export async function replyOpenCodePermission(
+  input: OpenCodeReplyPermissionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(
+    `${config.baseUrl}/permission/${encodeURIComponent(input.requestId)}/reply`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify({
+        reply: input.reply,
+        ...(input.message ? { message: input.message } : {}),
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode permission reply failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
+}
+
+export async function getOpenCodeVcs(
+  input: OpenCodeGetVcsInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeVcsInfo> {
+  const response = await fetch(`${config.baseUrl}/vcs`, {
+    headers: buildHeaders(config, input.directory),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode VCS lookup failed with ${response.status}.`);
+  }
+  return decodeVcsInfo(await response.json());
+}
+
 export async function createOpenCodeSession(
   input: OpenCodeCreateSessionInput,
   config: ResolvedOpenCodeConfig,
@@ -128,7 +213,10 @@ export async function createOpenCodeSession(
   const response = await fetch(`${config.baseUrl}/session`, {
     method: "POST",
     headers: buildHeaders(config, input.directory),
-    body: JSON.stringify(input.title ? { title: input.title } : {}),
+    body: JSON.stringify({
+      ...(input.title ? { title: input.title } : {}),
+      ...(input.permission ? { permission: input.permission } : {}),
+    }),
   });
   if (!response.ok) {
     throw new Error(`OpenCode session creation failed with ${response.status}.`);
@@ -140,13 +228,26 @@ export async function sendOpenCodeMessage(
   input: OpenCodeSendMessageInput,
   config: ResolvedOpenCodeConfig,
 ): Promise<OpenCodeMessage | null> {
+  const parts =
+    input.parts ??
+    (typeof input.text === "string"
+      ? [
+          {
+            type: "text" as const,
+            text: input.text,
+          },
+        ]
+      : []);
   const response = await fetch(
     `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/message`,
     {
       method: "POST",
       headers: buildHeaders(config),
       body: JSON.stringify({
-        parts: [{ type: "text", text: input.text }],
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.agent ? { agent: input.agent } : {}),
+        ...(input.variant ? { variant: input.variant } : {}),
+        parts,
       }),
     },
   );
@@ -172,6 +273,58 @@ export async function abortOpenCodeSession(
     throw new Error(`OpenCode abort failed with ${response.status}.`);
   }
   return (await response.json()) === true;
+}
+
+export async function updateOpenCodeSession(
+  input: OpenCodeUpdateSessionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeSession> {
+  const body = {
+    ...(input.title !== undefined ? { title: input.title } : {}),
+    ...(input.permission !== undefined ? { permission: input.permission } : {}),
+  };
+  const response = await fetch(`${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}`, {
+    method: "PATCH",
+    headers: buildHeaders(config),
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode update session failed with ${response.status}.`);
+  }
+  return decodeSession(await response.json());
+}
+
+export async function deleteOpenCodeSession(
+  input: OpenCodeDeleteSessionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(`${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}`, {
+    method: "DELETE",
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode delete session failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
+}
+
+export async function forkOpenCodeSession(
+  input: OpenCodeForkSessionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeSession> {
+  const body = input.messageId !== undefined ? { messageID: input.messageId } : {};
+  const response = await fetch(
+    `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/fork`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify(body),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode fork session failed with ${response.status}.`);
+  }
+  return decodeSession(await response.json());
 }
 
 export async function streamOpenCodeEvents(input: {

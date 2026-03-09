@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createOpenCodeSession, fetchOpenCodeHealth, sendOpenCodeMessage } from "./client";
+import {
+  createOpenCodeSession,
+  fetchOpenCodeHealth,
+  getOpenCodeVcs,
+  replyOpenCodePermission,
+  sendOpenCodeMessage,
+  updateOpenCodeSession,
+} from "./client";
 
 const config = {
   baseUrl: "http://127.0.0.1:4096",
@@ -92,5 +99,123 @@ describe("opencode client", () => {
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/message");
     expect(call?.[1]?.body).toBe(JSON.stringify({ parts: [{ type: "text", text: "Continue" }] }));
+  });
+
+  it("forwards structured parts and model selection", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      text: async () => "",
+    } as Response);
+
+    await sendOpenCodeMessage(
+      {
+        ...config,
+        sessionId: "session-1",
+        parts: [
+          { type: "text", text: "See attached" },
+          {
+            type: "file",
+            mime: "image/png",
+            filename: "diagram.png",
+            url: "data:image/png;base64,abc",
+          },
+        ],
+        model: {
+          providerID: "anthropic",
+          modelID: "claude-3-7-sonnet",
+        },
+      },
+      config,
+    );
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[1]?.body).toBe(
+      JSON.stringify({
+        model: {
+          providerID: "anthropic",
+          modelID: "claude-3-7-sonnet",
+        },
+        parts: [
+          { type: "text", text: "See attached" },
+          {
+            type: "file",
+            mime: "image/png",
+            filename: "diagram.png",
+            url: "data:image/png;base64,abc",
+          },
+        ],
+      }),
+    );
+  });
+
+  it("updates canonical OpenCode session permissions", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "session-1",
+        directory: "/tmp/project-a",
+        title: "New session",
+        permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        time: { created: 1, updated: 1 },
+      }),
+    } as Response);
+
+    await updateOpenCodeSession(
+      {
+        ...config,
+        sessionId: "session-1",
+        permission: [{ permission: "*", pattern: "*", action: "allow" }],
+      },
+      config,
+    );
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[1]?.body).toBe(
+      JSON.stringify({ permission: [{ permission: "*", pattern: "*", action: "allow" }] }),
+    );
+  });
+
+  it("replies to OpenCode permission prompts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => true,
+    } as Response);
+
+    await expect(
+      replyOpenCodePermission(
+        {
+          ...config,
+          requestId: "permission-1",
+          reply: "once",
+        },
+        config,
+      ),
+    ).resolves.toBe(true);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/permission/permission-1/reply");
+    expect(call?.[1]?.body).toBe(JSON.stringify({ reply: "once" }));
+  });
+
+  it("loads VCS info for the requested directory", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ branch: "feature/opencode" }),
+    } as Response);
+
+    await expect(
+      getOpenCodeVcs(
+        {
+          ...config,
+          directory: "/tmp/project-a",
+        },
+        config,
+      ),
+    ).resolves.toEqual({ branch: "feature/opencode" });
+
+    const call = fetchMock.mock.calls[0];
+    const headers = call?.[1]?.headers as Headers;
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/vcs");
+    expect(headers.get("x-opencode-directory")).toBe("/tmp/project-a");
   });
 });

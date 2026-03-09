@@ -2,25 +2,40 @@ import { spawn, type ChildProcessByStdio } from "node:child_process";
 import type { Readable } from "node:stream";
 import type {
   OpenCodeAbortSessionInput,
+  OpenCodeListAgentsInput,
   OpenCodeCreateSessionInput,
+  OpenCodeDeleteSessionInput,
+  OpenCodeForkSessionInput,
   OpenCodeEvent,
+  OpenCodeGetVcsInput,
   OpenCodeGetSessionInput,
   OpenCodeListProjectsInput,
+  OpenCodeListPermissionsInput,
   OpenCodeListSessionsInput,
+  OpenCodeReplyPermissionInput,
   OpenCodeSendMessageInput,
   OpenCodeStatus,
+  OpenCodeUpdateSessionInput,
 } from "@t3tools/contracts";
 import {
   abortOpenCodeSession,
   createOpenCodeSession,
+  deleteOpenCodeSession,
   fetchOpenCodeHealth,
+  forkOpenCodeSession,
   getOpenCodeMessages,
   getOpenCodeSession,
   getOpenCodeStatuses,
+  getOpenCodeVcs,
+  listOpenCodeAgents,
+  listOpenCodeProviders,
+  listOpenCodePermissions,
   listOpenCodeProjects,
   listOpenCodeSessions,
+  replyOpenCodePermission,
   sendOpenCodeMessage,
   streamOpenCodeEvents,
+  updateOpenCodeSession,
 } from "./client";
 import { isLoopbackOpenCodeUrl, resolveOpenCodeConfig, type ResolvedOpenCodeConfig } from "./config";
 
@@ -95,6 +110,16 @@ export class OpenCodeBridge {
     return listOpenCodeProjects(config);
   }
 
+  async listProviders(input: OpenCodeListProjectsInput) {
+    const config = await this.ensureReady(input);
+    return listOpenCodeProviders(config);
+  }
+
+  async listAgents(input: OpenCodeListAgentsInput) {
+    const config = await this.ensureReady(input);
+    return listOpenCodeAgents(config);
+  }
+
   async listSessions(input: OpenCodeListSessionsInput) {
     const config = await this.ensureReady(input);
     return listOpenCodeSessions({
@@ -120,6 +145,21 @@ export class OpenCodeBridge {
     return getOpenCodeStatuses(config);
   }
 
+  async listPermissions(input: OpenCodeListPermissionsInput) {
+    const config = await this.ensureReady(input);
+    return listOpenCodePermissions(config);
+  }
+
+  async replyPermission(input: OpenCodeReplyPermissionInput) {
+    const config = await this.ensureReady(input);
+    return replyOpenCodePermission(input, config);
+  }
+
+  async getVcs(input: OpenCodeGetVcsInput) {
+    const config = await this.ensureReady(input);
+    return getOpenCodeVcs(input, config);
+  }
+
   async createSession(input: OpenCodeCreateSessionInput) {
     const config = await this.ensureReady(input);
     return createOpenCodeSession(input, config);
@@ -133,6 +173,21 @@ export class OpenCodeBridge {
   async abortSession(input: OpenCodeAbortSessionInput) {
     const config = await this.ensureReady(input);
     return abortOpenCodeSession(config, input.sessionId);
+  }
+
+  async updateSession(input: OpenCodeUpdateSessionInput) {
+    const config = await this.ensureReady(input);
+    return updateOpenCodeSession(input, config);
+  }
+
+  async deleteSession(input: OpenCodeDeleteSessionInput) {
+    const config = await this.ensureReady(input);
+    return deleteOpenCodeSession(input, config);
+  }
+
+  async forkSession(input: OpenCodeForkSessionInput) {
+    const config = await this.ensureReady(input);
+    return forkOpenCodeSession(input, config);
   }
 
   private async ensureReady(input: OpenCodeListProjectsInput): Promise<ResolvedOpenCodeConfig> {

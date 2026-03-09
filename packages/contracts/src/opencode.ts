@@ -40,6 +40,90 @@ export const OpenCodeProject = Schema.Struct({
 });
 export type OpenCodeProject = typeof OpenCodeProject.Type;
 
+const OpenCodeProviderModalities = Schema.Struct({
+  text: Schema.Boolean,
+  audio: Schema.Boolean,
+  image: Schema.Boolean,
+  video: Schema.Boolean,
+  pdf: Schema.Boolean,
+});
+
+const OpenCodeProviderInterleavedCapability = Schema.Union([
+  Schema.Boolean,
+  Schema.Struct({
+    field: Schema.Literals(["reasoning_content", "reasoning_details"]),
+  }),
+]);
+
+const OpenCodeProviderModelCapabilities = Schema.Struct({
+  temperature: Schema.Boolean,
+  reasoning: Schema.Boolean,
+  attachment: Schema.Boolean,
+  toolcall: Schema.Boolean,
+  input: OpenCodeProviderModalities,
+  output: OpenCodeProviderModalities,
+  interleaved: OpenCodeProviderInterleavedCapability,
+});
+
+const OpenCodeProviderModelCost = Schema.Struct({
+  input: Schema.Number,
+  output: Schema.Number,
+  cache: Schema.Struct({
+    read: Schema.Number,
+    write: Schema.Number,
+  }),
+  experimentalOver200K: Schema.optional(
+    Schema.Struct({
+      input: Schema.Number,
+      output: Schema.Number,
+      cache: Schema.Struct({
+        read: Schema.Number,
+        write: Schema.Number,
+      }),
+    }),
+  ),
+});
+
+const OpenCodeProviderModelLimit = Schema.Struct({
+  context: Schema.Number,
+  input: Schema.optional(Schema.Number),
+  output: Schema.Number,
+});
+
+export const OpenCodeProviderModel = Schema.Struct({
+  id: Schema.String,
+  providerID: Schema.String,
+  name: Schema.String,
+  family: Schema.optional(Schema.String),
+  capabilities: OpenCodeProviderModelCapabilities,
+  cost: OpenCodeProviderModelCost,
+  limit: OpenCodeProviderModelLimit,
+  status: Schema.Literals(["alpha", "beta", "deprecated", "active"]),
+  options: Schema.Record(Schema.String, Schema.Unknown),
+  headers: Schema.Record(Schema.String, Schema.String),
+  release_date: Schema.String,
+  variants: Schema.optional(Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown))),
+});
+export type OpenCodeProviderModel = typeof OpenCodeProviderModel.Type;
+
+export const OpenCodeProvider = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  source: Schema.Literals(["env", "config", "custom", "api"]),
+  env: Schema.Array(Schema.String),
+  key: Schema.optional(Schema.String),
+  options: Schema.Record(Schema.String, Schema.Unknown),
+  models: Schema.Record(Schema.String, OpenCodeProviderModel),
+});
+export type OpenCodeProvider = typeof OpenCodeProvider.Type;
+
+export const OpenCodeProviderCatalog = Schema.Struct({
+  all: Schema.Array(OpenCodeProvider),
+  default: Schema.Record(Schema.String, Schema.String),
+  connected: Schema.Array(Schema.String),
+});
+export type OpenCodeProviderCatalog = typeof OpenCodeProviderCatalog.Type;
+
 const OpenCodeSessionTime = Schema.Struct({
   created: OpenCodeTimestamp,
   updated: OpenCodeTimestamp,
@@ -58,6 +142,43 @@ const OpenCodeSessionProjectRef = Schema.Struct({
   worktree: TrimmedNonEmptyString,
 });
 
+export const OpenCodePermissionAction = Schema.Literals(["allow", "deny", "ask"]);
+export type OpenCodePermissionAction = typeof OpenCodePermissionAction.Type;
+
+export const OpenCodePermissionRule = Schema.Struct({
+  permission: Schema.String,
+  pattern: Schema.String,
+  action: OpenCodePermissionAction,
+});
+export type OpenCodePermissionRule = typeof OpenCodePermissionRule.Type;
+
+export const OpenCodePermissionRuleset = Schema.Array(OpenCodePermissionRule);
+export type OpenCodePermissionRuleset = typeof OpenCodePermissionRuleset.Type;
+
+export const OpenCodePermissionRequest = Schema.Struct({
+  id: OpenCodeIdentifier,
+  sessionID: OpenCodeIdentifier,
+  permission: Schema.String,
+  patterns: Schema.Array(Schema.String),
+  metadata: Schema.Record(Schema.String, Schema.Unknown),
+  always: Schema.Array(Schema.String),
+  tool: Schema.optional(
+    Schema.Struct({
+      messageID: Schema.String,
+      callID: Schema.String,
+    }),
+  ),
+});
+export type OpenCodePermissionRequest = typeof OpenCodePermissionRequest.Type;
+
+export const OpenCodePermissionReply = Schema.Literals(["once", "always", "reject"]);
+export type OpenCodePermissionReply = typeof OpenCodePermissionReply.Type;
+
+export const OpenCodeVcsInfo = Schema.Struct({
+  branch: Schema.NullOr(Schema.String),
+});
+export type OpenCodeVcsInfo = typeof OpenCodeVcsInfo.Type;
+
 export const OpenCodeSessionSummary = Schema.Struct({
   id: OpenCodeIdentifier,
   slug: Schema.optional(Schema.String),
@@ -68,6 +189,7 @@ export const OpenCodeSessionSummary = Schema.Struct({
   title: Schema.String,
   version: Schema.optional(Schema.String),
   summary: Schema.optional(OpenCodeSessionSummaryInfo),
+  permission: Schema.optional(OpenCodePermissionRuleset),
   time: OpenCodeSessionTime,
   project: Schema.optional(OpenCodeSessionProjectRef),
 });
@@ -83,14 +205,79 @@ export const OpenCodeSession = Schema.Struct({
   title: Schema.String,
   version: Schema.optional(Schema.String),
   summary: Schema.optional(OpenCodeSessionSummaryInfo),
+  permission: Schema.optional(OpenCodePermissionRuleset),
   time: OpenCodeSessionTime,
 });
 export type OpenCodeSession = typeof OpenCodeSession.Type;
 
-const OpenCodeMessageModel = Schema.Struct({
+export const OpenCodePromptModel = Schema.Struct({
   providerID: Schema.String,
   modelID: Schema.String,
 });
+export type OpenCodePromptModel = typeof OpenCodePromptModel.Type;
+
+export const OpenCodeAgentMode = Schema.Literals(["subagent", "primary", "all"]);
+export type OpenCodeAgentMode = typeof OpenCodeAgentMode.Type;
+
+export const OpenCodeAgent = Schema.Struct({
+  name: Schema.String,
+  description: Schema.optional(Schema.String),
+  mode: OpenCodeAgentMode,
+  native: Schema.optional(Schema.Boolean),
+  hidden: Schema.optional(Schema.Boolean),
+  topP: Schema.optional(Schema.Number),
+  temperature: Schema.optional(Schema.Number),
+  color: Schema.optional(Schema.String),
+  permission: OpenCodePermissionRuleset,
+  model: Schema.optional(OpenCodePromptModel),
+  variant: Schema.optional(Schema.String),
+  prompt: Schema.optional(Schema.String),
+  options: Schema.Record(Schema.String, Schema.Unknown),
+  steps: Schema.optional(Schema.Number),
+});
+export type OpenCodeAgent = typeof OpenCodeAgent.Type;
+
+export const OpenCodePromptTextPart = Schema.Struct({
+  type: Schema.Literal("text"),
+  text: Schema.String,
+  id: Schema.optional(OpenCodeIdentifier),
+});
+export type OpenCodePromptTextPart = typeof OpenCodePromptTextPart.Type;
+
+export const OpenCodePromptFilePart = Schema.Struct({
+  type: Schema.Literal("file"),
+  mime: Schema.String,
+  url: Schema.String,
+  filename: Schema.optional(Schema.String),
+  id: Schema.optional(OpenCodeIdentifier),
+});
+export type OpenCodePromptFilePart = typeof OpenCodePromptFilePart.Type;
+
+export const OpenCodePromptAgentPart = Schema.Struct({
+  type: Schema.Literal("agent"),
+  name: Schema.String,
+  id: Schema.optional(OpenCodeIdentifier),
+});
+export type OpenCodePromptAgentPart = typeof OpenCodePromptAgentPart.Type;
+
+export const OpenCodePromptSubtaskPart = Schema.Struct({
+  type: Schema.Literal("subtask"),
+  prompt: Schema.String,
+  description: Schema.String,
+  agent: Schema.String,
+  model: Schema.optional(OpenCodePromptModel),
+  command: Schema.optional(Schema.String),
+  id: Schema.optional(OpenCodeIdentifier),
+});
+export type OpenCodePromptSubtaskPart = typeof OpenCodePromptSubtaskPart.Type;
+
+export const OpenCodePromptPart = Schema.Union([
+  OpenCodePromptTextPart,
+  OpenCodePromptFilePart,
+  OpenCodePromptAgentPart,
+  OpenCodePromptSubtaskPart,
+]);
+export type OpenCodePromptPart = typeof OpenCodePromptPart.Type;
 
 const OpenCodeMessageTime = Schema.Struct({
   created: OpenCodeTimestamp,
@@ -104,7 +291,7 @@ export const OpenCodeMessageInfo = Schema.Struct({
   time: OpenCodeMessageTime,
   summary: Schema.optional(Schema.Unknown),
   agent: Schema.optional(Schema.String),
-  model: Schema.optional(OpenCodeMessageModel),
+  model: Schema.optional(OpenCodePromptModel),
   variant: Schema.optional(Schema.String),
   id: OpenCodeIdentifier,
   sessionID: OpenCodeIdentifier,
@@ -174,6 +361,12 @@ export type OpenCodeEvent = typeof OpenCodeEvent.Type;
 export const OpenCodeListProjectsInput = OpenCodeServerConfigInput;
 export type OpenCodeListProjectsInput = typeof OpenCodeListProjectsInput.Type;
 
+export const OpenCodeListProvidersInput = OpenCodeServerConfigInput;
+export type OpenCodeListProvidersInput = typeof OpenCodeListProvidersInput.Type;
+
+export const OpenCodeListAgentsInput = OpenCodeServerConfigInput;
+export type OpenCodeListAgentsInput = typeof OpenCodeListAgentsInput.Type;
+
 export const OpenCodeListSessionsInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,
   directory: Schema.optional(TrimmedNonEmptyString),
@@ -188,17 +381,31 @@ export const OpenCodeGetSessionInput = Schema.Struct({
 });
 export type OpenCodeGetSessionInput = typeof OpenCodeGetSessionInput.Type;
 
+export const OpenCodeListPermissionsInput = OpenCodeServerConfigInput;
+export type OpenCodeListPermissionsInput = typeof OpenCodeListPermissionsInput.Type;
+
+export const OpenCodeGetVcsInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  directory: TrimmedNonEmptyString,
+});
+export type OpenCodeGetVcsInput = typeof OpenCodeGetVcsInput.Type;
+
 export const OpenCodeCreateSessionInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,
   directory: TrimmedNonEmptyString,
   title: Schema.optional(Schema.String),
+  permission: Schema.optional(OpenCodePermissionRuleset),
 });
 export type OpenCodeCreateSessionInput = typeof OpenCodeCreateSessionInput.Type;
 
 export const OpenCodeSendMessageInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,
   sessionId: OpenCodeIdentifier,
-  text: Schema.String,
+  text: Schema.optional(Schema.String),
+  parts: Schema.optional(Schema.Array(OpenCodePromptPart)),
+  model: Schema.optional(OpenCodePromptModel),
+  agent: Schema.optional(Schema.String),
+  variant: Schema.optional(Schema.String),
 });
 export type OpenCodeSendMessageInput = typeof OpenCodeSendMessageInput.Type;
 
@@ -207,3 +414,32 @@ export const OpenCodeAbortSessionInput = Schema.Struct({
   sessionId: OpenCodeIdentifier,
 });
 export type OpenCodeAbortSessionInput = typeof OpenCodeAbortSessionInput.Type;
+
+export const OpenCodeUpdateSessionInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  sessionId: OpenCodeIdentifier,
+  title: Schema.optional(Schema.String),
+  permission: Schema.optional(OpenCodePermissionRuleset),
+});
+export type OpenCodeUpdateSessionInput = typeof OpenCodeUpdateSessionInput.Type;
+
+export const OpenCodeReplyPermissionInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  requestId: OpenCodeIdentifier,
+  reply: OpenCodePermissionReply,
+  message: Schema.optional(Schema.String),
+});
+export type OpenCodeReplyPermissionInput = typeof OpenCodeReplyPermissionInput.Type;
+
+export const OpenCodeDeleteSessionInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  sessionId: OpenCodeIdentifier,
+});
+export type OpenCodeDeleteSessionInput = typeof OpenCodeDeleteSessionInput.Type;
+
+export const OpenCodeForkSessionInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  sessionId: OpenCodeIdentifier,
+  messageId: Schema.optional(OpenCodeIdentifier),
+});
+export type OpenCodeForkSessionInput = typeof OpenCodeForkSessionInput.Type;

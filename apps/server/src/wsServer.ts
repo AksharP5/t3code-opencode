@@ -930,6 +930,28 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeListProviders: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listProviders(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode providers: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeListAgents: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listAgents(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode agents: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeListProjects: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({
@@ -985,6 +1007,39 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeListPermissions: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listPermissions(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode permissions: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeReplyPermission: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.replyPermission(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to reply to OpenCode permission: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeGetVcs: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.getVcs(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to get OpenCode VCS info: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeCreateSession: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({
@@ -1014,6 +1069,39 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           catch: (cause) =>
             new RouteRequestError({
               message: `Failed to abort OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeUpdateSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.updateSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to update OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeDeleteSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.deleteSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to delete OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeForkSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.forkSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to fork OpenCode session: ${String(cause)}`,
             }),
         });
       }

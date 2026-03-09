@@ -32,12 +32,20 @@ import { KeybindingRule } from "./keybindings";
 import { ProjectSearchEntriesInput, ProjectWriteFileInput } from "./project";
 import { OpenInEditorInput } from "./editor";
 import {
+  OpenCodeListAgentsInput,
   OpenCodeAbortSessionInput,
   OpenCodeCreateSessionInput,
+  OpenCodeDeleteSessionInput,
+  OpenCodeForkSessionInput,
+  OpenCodeGetVcsInput,
   OpenCodeGetSessionInput,
+  OpenCodeListPermissionsInput,
+  OpenCodeListProvidersInput,
   OpenCodeListProjectsInput,
   OpenCodeListSessionsInput,
+  OpenCodeReplyPermissionInput,
   OpenCodeSendMessageInput,
+  OpenCodeUpdateSessionInput,
 } from "./opencode";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
@@ -79,14 +87,22 @@ export const WS_METHODS = {
   // OpenCode methods
   opencodeGetStatus: "opencode.getStatus",
   opencodeEnsureServer: "opencode.ensureServer",
+  opencodeListProviders: "opencode.listProviders",
+  opencodeListAgents: "opencode.listAgents",
   opencodeListProjects: "opencode.listProjects",
   opencodeListSessions: "opencode.listSessions",
   opencodeGetSession: "opencode.getSession",
   opencodeGetMessages: "opencode.getMessages",
   opencodeGetStatuses: "opencode.getStatuses",
+  opencodeListPermissions: "opencode.listPermissions",
+  opencodeReplyPermission: "opencode.replyPermission",
+  opencodeGetVcs: "opencode.getVcs",
   opencodeCreateSession: "opencode.createSession",
   opencodeSendMessage: "opencode.sendMessage",
   opencodeAbortSession: "opencode.abortSession",
+  opencodeUpdateSession: "opencode.updateSession",
+  opencodeDeleteSession: "opencode.deleteSession",
+  opencodeForkSession: "opencode.forkSession",
 } as const;
 
 // ── Push Event Channels ──────────────────────────────────────────────
@@ -154,14 +170,22 @@ const WebSocketRequestBody = Schema.Union([
   // OpenCode methods
   tagRequestBody(WS_METHODS.opencodeGetStatus, OpenCodeListProjectsInput),
   tagRequestBody(WS_METHODS.opencodeEnsureServer, OpenCodeListProjectsInput),
+  tagRequestBody(WS_METHODS.opencodeListProviders, OpenCodeListProvidersInput),
+  tagRequestBody(WS_METHODS.opencodeListAgents, OpenCodeListAgentsInput),
   tagRequestBody(WS_METHODS.opencodeListProjects, OpenCodeListProjectsInput),
   tagRequestBody(WS_METHODS.opencodeListSessions, OpenCodeListSessionsInput),
   tagRequestBody(WS_METHODS.opencodeGetSession, OpenCodeGetSessionInput),
   tagRequestBody(WS_METHODS.opencodeGetMessages, OpenCodeGetSessionInput),
   tagRequestBody(WS_METHODS.opencodeGetStatuses, OpenCodeListProjectsInput),
+  tagRequestBody(WS_METHODS.opencodeListPermissions, OpenCodeListPermissionsInput),
+  tagRequestBody(WS_METHODS.opencodeReplyPermission, OpenCodeReplyPermissionInput),
+  tagRequestBody(WS_METHODS.opencodeGetVcs, OpenCodeGetVcsInput),
   tagRequestBody(WS_METHODS.opencodeCreateSession, OpenCodeCreateSessionInput),
   tagRequestBody(WS_METHODS.opencodeSendMessage, OpenCodeSendMessageInput),
   tagRequestBody(WS_METHODS.opencodeAbortSession, OpenCodeAbortSessionInput),
+  tagRequestBody(WS_METHODS.opencodeUpdateSession, OpenCodeUpdateSessionInput),
+  tagRequestBody(WS_METHODS.opencodeDeleteSession, OpenCodeDeleteSessionInput),
+  tagRequestBody(WS_METHODS.opencodeForkSession, OpenCodeForkSessionInput),
 ]);
 
 export const WebSocketRequest = Schema.Struct({
