@@ -99,6 +99,7 @@ export function mapOpenCodeThreadSummary(input: {
     providerCatalog: input.providerCatalog,
   });
   const model = resolveThreadModel({
+    session: input.session,
     messages: [],
     providerCatalog: input.providerCatalog,
     provider,
@@ -172,6 +173,7 @@ export function mapOpenCodeThreadDetail(input: {
     activities: input.activities,
   });
   const model = resolveThreadModel({
+    session: input.session,
     messages: input.messages,
     providerCatalog: input.providerCatalog,
     provider: summary.session?.provider ?? "codex",
@@ -560,10 +562,14 @@ function openCodeStatusToThreadPhase(
 }
 
 function resolveThreadModel(input: {
+  session: Pick<OpenCodeSessionSummary | OpenCodeSession, "modelID">;
   messages: OpenCodeMessage[];
   providerCatalog?: OpenCodeProviderCatalog | null | undefined;
   provider: string;
 }): string {
+  if (typeof input.session.modelID === "string" && input.session.modelID.trim().length > 0) {
+    return input.session.modelID;
+  }
   const providerModel = resolveCatalogDefaultModel(input.providerCatalog, input.provider);
   if (providerModel) {
     for (let index = input.messages.length - 1; index >= 0; index -= 1) {
@@ -595,6 +601,9 @@ function resolveThreadProvider(input: {
   session: OpenCodeSessionSummary | OpenCodeSession;
   providerCatalog?: OpenCodeProviderCatalog | null | undefined;
 }): string {
+  if (typeof input.session.providerID === "string" && input.session.providerID.trim().length > 0) {
+    return input.session.providerID;
+  }
   if (input.providerCatalog?.all.length) {
     const connectedProviders = input.providerCatalog.connected
       .map((providerId) => input.providerCatalog?.all.find((provider) => provider.id === providerId))

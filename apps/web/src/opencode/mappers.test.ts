@@ -193,6 +193,22 @@ describe("OpenCode mappers", () => {
     expect(thread.runtimeMode).toBe("full-access");
   });
 
+  it("prefers summary provider and model metadata when available", () => {
+    const thread = mapOpenCodeThreadSummary({
+      session: makeSessionSummary({
+        providerID: "anthropic",
+        modelID: "claude-3-7-sonnet",
+      }),
+      projectId: "project-1",
+      status: { type: "idle" },
+      providerCatalog: makeProviderCatalog(),
+      agentCatalog: buildOpenCodeAgentCatalog(makeAgents()),
+    });
+
+    expect(thread.session?.provider).toBe("anthropic");
+    expect(thread.model).toBe("claude-3-7-sonnet");
+  });
+
   it("derives plan mode from the latest OpenCode agent turn", () => {
     const thread = mapOpenCodeThreadDetail({
       session: makeSessionSummary({ directory: "/tmp/project-a/worktree-a" }) as OpenCodeSession,
