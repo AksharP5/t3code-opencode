@@ -3932,7 +3932,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
         error={displayedThreadError}
         onDismiss={() => setThreadError(activeThread.id, null)}
       />
-      <PlanModePanel activePlan={threadCapabilities.planMode ? activePlan : null} />
       {/* Main content area with optional plan sidebar */}
       <div className="flex min-h-0 flex-1">
         {/* Chat column */}
