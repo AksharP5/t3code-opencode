@@ -118,6 +118,7 @@ import {
 import { basenameOfPath, getVscodeIconUrlForEntry } from "../vscode-icons";
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
+import { preferredTerminalEditor, resolvePathLinkTarget } from "../terminal-links";
 import {
   buildTurnDiffTree,
   summarizeTurnDiffStats,
@@ -4059,7 +4060,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
       <div className={cn("px-3 pt-1.5 sm:px-5 sm:pt-2", isGitRepo ? "pb-1" : "pb-3 sm:pb-4")}>
         {isOpenCodeThread && openCodeState.activeDiff.length > 0 ? (
           <div className="mx-auto mb-2 w-full max-w-3xl">
-            <OpenCodeDiffDock diff={openCodeState.activeDiff} />
+            <OpenCodeDiffDock
+              diff={openCodeState.activeDiff}
+              cwd={activeThread.worktreePath ?? activeProject?.cwd ?? null}
+            />
           </div>
         ) : null}
         {isOpenCodeThread && openCodeState.activeTodos.length > 0 ? (
@@ -6235,10 +6239,22 @@ const OpenCodeTodoDock = memo(function OpenCodeTodoDock(props: {
 
 const OpenCodeDiffDock = memo(function OpenCodeDiffDock(props: {
   diff: ReadonlyArray<OpenCodeFileDiff>;
+  cwd: string | null;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const additions = props.diff.reduce((sum, file) => sum + file.additions, 0);
   const deletions = props.diff.reduce((sum, file) => sum + file.deletions, 0);
+  const openFile = useCallback(
+    (filePath: string) => {
+      const api = readNativeApi();
+      if (!api) {
+        return;
+      }
+      const target = props.cwd ? resolvePathLinkTarget(filePath, props.cwd) : filePath;
+      void api.shell.openInEditor(target, preferredTerminalEditor()).catch(() => undefined);
+    },
+    [props.cwd],
+  );
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card/80 backdrop-blur-sm">
@@ -6262,11 +6278,16 @@ const OpenCodeDiffDock = memo(function OpenCodeDiffDock(props: {
         <div className="border-t border-border/70 px-3 py-2">
           <div className="space-y-2">
             {props.diff.map((file) => (
-              <div key={file.file} className="flex items-center gap-3 text-xs">
+              <button
+                key={file.file}
+                type="button"
+                className="flex w-full items-center gap-3 text-left text-xs"
+                onClick={() => openFile(file.file)}
+              >
                 <span className="min-w-0 flex-1 truncate text-foreground">{file.file}</span>
                 <span className="shrink-0 text-emerald-600 dark:text-emerald-300">+{file.additions}</span>
                 <span className="shrink-0 text-rose-600 dark:text-rose-300">-{file.deletions}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
