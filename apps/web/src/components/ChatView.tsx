@@ -309,6 +309,37 @@ function buildOpenCodeQuestionAnswers(
   });
 }
 
+function resolveOpenCodeAuthError(messages: ReadonlyArray<ChatMessage>): { message: string; providerId: string | null } | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const parts = message?.structuredParts;
+    if (!parts) {
+      continue;
+    }
+    for (const part of parts) {
+      if (!part.state || typeof part.state !== "object") {
+        continue;
+      }
+      const state = part.state as Record<string, unknown>;
+      const error = state.error;
+      if (!error || typeof error !== "object") {
+        continue;
+      }
+      const errorRecord = error as Record<string, unknown>;
+      if (errorRecord.name !== "ProviderAuthError") {
+        continue;
+      }
+      const data = errorRecord.data && typeof errorRecord.data === "object"
+        ? (errorRecord.data as Record<string, unknown>)
+        : null;
+      const providerId = typeof data?.providerID === "string" ? data.providerID : null;
+      const detail = typeof data?.message === "string" ? data.message : "Provider authentication is required.";
+      return { message: detail, providerId };
+    }
+  }
+  return null;
+}
+
 function openCodePermissionToRequestKind(
   permission: string,
 ): PendingApproval["requestKind"] {
@@ -933,6 +964,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [activeThread?.id, activeThread?.source, openCodeState.pendingQuestions],
   );
   const isOpenCodeThread = activeThread?.source === "opencode";
+  const activeOpenCodeAuthError = useMemo(
+    () => (isOpenCodeThread ? resolveOpenCodeAuthError(activeThread?.messages ?? []) : null),
+    [activeThread?.messages, isOpenCodeThread],
+  );
   const threadCapabilities = activeThread?.capabilities ?? NATIVE_THREAD_CAPABILITIES;
   const runtimeMode =
     composerDraft.runtimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
@@ -4142,6 +4177,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       {/* Error banner */}
       <ProviderHealthBanner status={activeProviderStatus} />
+      {activeOpenCodeAuthError ? (
+        <OpenCodeAuthRecoveryBanner
+          message={activeOpenCodeAuthError.message}
+          providerId={activeOpenCodeAuthError.providerId}
+          onOpenSettings={() => {
+            void navigate({ to: "/settings" });
+          }}
+        />
+      ) : null}
       {isOpenCodeThread && activeThread.session?.revert ? (
         <OpenCodeRevertBanner
           onRestore={() => {
@@ -6488,6 +6532,28 @@ const OpenCodeRevertBanner = memo(function OpenCodeRevertBanner(props: {
         </div>
         <Button type="button" size="sm" variant="outline" onClick={props.onRestore}>
           Restore
+        </Button>
+      </div>
+    </div>
+  );
+});
+
+const OpenCodeAuthRecoveryBanner = memo(function OpenCodeAuthRecoveryBanner(props: {
+  message: string;
+  providerId: string | null;
+  onOpenSettings: () => void;
+}) {
+  return (
+    <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-5">
+      <div className="flex items-center justify-between rounded-2xl border border-destructive/30 bg-destructive/8 px-4 py-3">
+        <div>
+          <p className="text-sm font-medium text-foreground">
+            Reconnect {props.providerId ?? "provider"} to continue
+          </p>
+          <p className="text-xs text-muted-foreground">{props.message}</p>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={props.onOpenSettings}>
+          Open settings
         </Button>
       </div>
     </div>
