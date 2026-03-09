@@ -14,6 +14,7 @@ import { useTheme } from "../hooks/useTheme";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { ensureNativeApi } from "../nativeApi";
 import {
+  opencodeMcpServersQueryOptions,
   opencodeProviderAuthMethodsQueryOptions,
   opencodeProvidersQueryOptions,
   opencodeStatusQueryOptions,
@@ -111,6 +112,10 @@ function SettingsRouteView() {
   const [providerPendingOauthMethodById, setProviderPendingOauthMethodById] = useState<Record<string, number>>(
     {},
   );
+  const [mcpAuthCodeByName, setMcpAuthCodeByName] = useState<Record<string, string>>({});
+  const [mcpAuthStartUrlByName, setMcpAuthStartUrlByName] = useState<Record<string, string>>({});
+  const [mcpAuthErrorByName, setMcpAuthErrorByName] = useState<Record<string, string | null>>({});
+  const [mcpPendingName, setMcpPendingName] = useState<string | null>(null);
 
   const codexBinaryPath = settings.codexBinaryPath;
   const codexHomePath = settings.codexHomePath;
@@ -123,6 +128,10 @@ function SettingsRouteView() {
   });
   const openCodeProviderAuthMethodsQuery = useQuery({
     ...opencodeProviderAuthMethodsQueryOptions(openCodeConfig),
+    enabled: openCodeStatusQuery.data?.healthy === true,
+  });
+  const openCodeMcpServersQuery = useQuery({
+    ...opencodeMcpServersQueryOptions(openCodeConfig),
     enabled: openCodeStatusQuery.data?.healthy === true,
   });
 
@@ -163,6 +172,10 @@ function SettingsRouteView() {
     void openCodeProvidersQuery.refetch();
     void openCodeProviderAuthMethodsQuery.refetch();
   }, [openCodeProviderAuthMethodsQuery, openCodeProvidersQuery]);
+
+  const refreshOpenCodeMcpQuery = useCallback(() => {
+    void openCodeMcpServersQuery.refetch();
+  }, [openCodeMcpServersQuery]);
 
   const connectOpenCodeProvider = useCallback(
     async (providerId: string) => {
@@ -333,6 +346,142 @@ function SettingsRouteView() {
         });
     },
     [openCodeConfig, refreshOpenCodeProviderQueries],
+  );
+
+  const startOpenCodeMcpAuth = useCallback(
+    async (serverName: string) => {
+      setMcpPendingName(serverName);
+      setMcpAuthErrorByName((existing) => ({ ...existing, [serverName]: null }));
+      await ensureNativeApi()
+        .opencode.startMcpAuth({
+          ...openCodeConfig,
+          serverName,
+        })
+        .then(async (result) => {
+          setMcpAuthStartUrlByName((existing) => ({ ...existing, [serverName]: result.authorizationUrl }));
+          await ensureNativeApi().shell.openExternal(result.authorizationUrl);
+        })
+        .catch((error: unknown) => {
+          setMcpAuthErrorByName((existing) => ({
+            ...existing,
+            [serverName]: error instanceof Error ? error.message : "Failed to start MCP auth.",
+          }));
+        })
+        .finally(() => {
+          setMcpPendingName(null);
+        });
+    },
+    [openCodeConfig],
+  );
+
+  const completeOpenCodeMcpAuth = useCallback(
+    async (serverName: string) => {
+      const code = mcpAuthCodeByName[serverName]?.trim();
+      if (!code) {
+        setMcpAuthErrorByName((existing) => ({
+          ...existing,
+          [serverName]: "Enter the authorization code first.",
+        }));
+        return;
+      }
+      setMcpPendingName(serverName);
+      setMcpAuthErrorByName((existing) => ({ ...existing, [serverName]: null }));
+      await ensureNativeApi()
+        .opencode.completeMcpAuth({
+          ...openCodeConfig,
+          serverName,
+          code,
+        })
+        .then(() => {
+          setMcpAuthCodeByName((existing) => ({ ...existing, [serverName]: "" }));
+          refreshOpenCodeMcpQuery();
+        })
+        .catch((error: unknown) => {
+          setMcpAuthErrorByName((existing) => ({
+            ...existing,
+            [serverName]: error instanceof Error ? error.message : "Failed to complete MCP auth.",
+          }));
+        })
+        .finally(() => {
+          setMcpPendingName(null);
+        });
+    },
+    [mcpAuthCodeByName, openCodeConfig, refreshOpenCodeMcpQuery],
+  );
+
+  const authenticateOpenCodeMcp = useCallback(
+    async (serverName: string) => {
+      setMcpPendingName(serverName);
+      setMcpAuthErrorByName((existing) => ({ ...existing, [serverName]: null }));
+      await ensureNativeApi()
+        .opencode.authenticateMcp({
+          ...openCodeConfig,
+          serverName,
+        })
+        .then(() => {
+          refreshOpenCodeMcpQuery();
+        })
+        .catch((error: unknown) => {
+          setMcpAuthErrorByName((existing) => ({
+            ...existing,
+            [serverName]: error instanceof Error ? error.message : "Failed to authenticate MCP server.",
+          }));
+        })
+        .finally(() => {
+          setMcpPendingName(null);
+        });
+    },
+    [openCodeConfig, refreshOpenCodeMcpQuery],
+  );
+
+  const removeOpenCodeMcpAuth = useCallback(
+    async (serverName: string) => {
+      setMcpPendingName(serverName);
+      setMcpAuthErrorByName((existing) => ({ ...existing, [serverName]: null }));
+      await ensureNativeApi()
+        .opencode.removeMcpAuth({
+          ...openCodeConfig,
+          serverName,
+        })
+        .then(() => {
+          refreshOpenCodeMcpQuery();
+        })
+        .catch((error: unknown) => {
+          setMcpAuthErrorByName((existing) => ({
+            ...existing,
+            [serverName]: error instanceof Error ? error.message : "Failed to remove MCP auth.",
+          }));
+        })
+        .finally(() => {
+          setMcpPendingName(null);
+        });
+    },
+    [openCodeConfig, refreshOpenCodeMcpQuery],
+  );
+
+  const toggleOpenCodeMcpConnection = useCallback(
+    async (serverName: string, connected: boolean) => {
+      setMcpPendingName(serverName);
+      setMcpAuthErrorByName((existing) => ({ ...existing, [serverName]: null }));
+      await ensureNativeApi()
+        .opencode[connected ? "disconnectMcp" : "connectMcp"]({
+          ...openCodeConfig,
+          serverName,
+        })
+        .then(() => {
+          refreshOpenCodeMcpQuery();
+        })
+        .catch((error: unknown) => {
+          setMcpAuthErrorByName((existing) => ({
+            ...existing,
+            [serverName]: error instanceof Error ? error.message : "Failed to update MCP connection.",
+          }));
+        })
+        .finally(() => {
+          setMcpPendingName(null);
+        });
+    },
+    [openCodeConfig, refreshOpenCodeMcpQuery],
   );
 
   const addCustomModel = useCallback((provider: ProviderKind) => {
@@ -648,6 +797,118 @@ function SettingsRouteView() {
                           ) : null}
                           {authError ? (
                             <p className="mt-2 text-xs text-muted-foreground">{authError}</p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border bg-background px-3 py-3">
+                  <div className="mb-3">
+                    <p className="text-sm font-medium text-foreground">MCP servers</p>
+                    <p className="text-xs text-muted-foreground">
+                      Monitor and authenticate canonical OpenCode MCP servers from T3 Code.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {Object.entries(openCodeMcpServersQuery.data ?? {}).map(([serverName, status]) => {
+                      const needsAuth = status.status === "needs_auth";
+                      const isConnected = status.status === "connected";
+                      return (
+                        <div key={serverName} className="rounded-lg border border-border/70 px-3 py-2">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{serverName}</p>
+                              <p className="text-xs text-muted-foreground">{status.status}</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {needsAuth ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="xs"
+                                    variant="outline"
+                                    disabled={mcpPendingName === serverName}
+                                    onClick={() => {
+                                      void authenticateOpenCodeMcp(serverName);
+                                    }}
+                                  >
+                                    Authenticate
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="xs"
+                                    variant="outline"
+                                    disabled={mcpPendingName === serverName}
+                                    onClick={() => {
+                                      void startOpenCodeMcpAuth(serverName);
+                                    }}
+                                  >
+                                    Start OAuth
+                                  </Button>
+                                </>
+                              ) : null}
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="outline"
+                                disabled={mcpPendingName === serverName}
+                                onClick={() => {
+                                  void toggleOpenCodeMcpConnection(serverName, isConnected);
+                                }}
+                              >
+                                {isConnected ? "Disconnect" : "Connect"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="outline"
+                                disabled={mcpPendingName === serverName}
+                                onClick={() => {
+                                  void removeOpenCodeMcpAuth(serverName);
+                                }}
+                              >
+                                Remove auth
+                              </Button>
+                            </div>
+                          </div>
+                          {needsAuth || mcpAuthStartUrlByName[serverName] ? (
+                            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                              <Input
+                                value={mcpAuthCodeByName[serverName] ?? ""}
+                                onChange={(event) =>
+                                  setMcpAuthCodeByName((existing) => ({
+                                    ...existing,
+                                    [serverName]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Authorization code"
+                                spellCheck={false}
+                              />
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="outline"
+                                disabled={mcpPendingName === serverName}
+                                onClick={() => {
+                                  void completeOpenCodeMcpAuth(serverName);
+                                }}
+                              >
+                                Finish OAuth
+                              </Button>
+                            </div>
+                          ) : null}
+                          {mcpAuthStartUrlByName[serverName] ? (
+                            <p className="mt-2 text-xs text-muted-foreground break-all">
+                              OAuth started: {mcpAuthStartUrlByName[serverName]}
+                            </p>
+                          ) : null}
+                          {status.status === "failed" || status.status === "needs_client_registration" ? (
+                            <p className="mt-2 text-xs text-muted-foreground">{status.error}</p>
+                          ) : null}
+                          {mcpAuthErrorByName[serverName] ? (
+                            <p className="mt-2 text-xs text-muted-foreground">{mcpAuthErrorByName[serverName]}</p>
                           ) : null}
                         </div>
                       );
