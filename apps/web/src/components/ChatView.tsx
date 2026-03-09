@@ -10,6 +10,7 @@ import {
   type OpenCodePermissionRequest,
   type OpenCodeSendMessageInput,
   type OpenCodeProviderCatalog,
+  type OpenCodeAgent,
   type OpenCodeTodo,
   type ProjectId,
   type ProjectEntry,
@@ -688,6 +689,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const nonPersistedComposerImageIds = composerDraft.nonPersistedImageIds;
   const setComposerDraftPrompt = useComposerDraftStore((store) => store.setPrompt);
   const setComposerDraftProvider = useComposerDraftStore((store) => store.setProvider);
+  const setComposerDraftAgent = useComposerDraftStore((store) => store.setAgent);
   const setComposerDraftModel = useComposerDraftStore((store) => store.setModel);
   const setComposerDraftRuntimeMode = useComposerDraftStore((store) => store.setRuntimeMode);
   const setComposerDraftInteractionMode = useComposerDraftStore(
@@ -933,11 +935,20 @@ export default function ChatView({ threadId }: ChatViewProps) {
     if (!isOpenCodeThread) {
       return null;
     }
+    if (composerDraft.agent) {
+      return composerDraft.agent;
+    }
     if (interactionMode === "plan") {
       return openCodeState.agentCatalog.planAgent;
     }
     return openCodeState.agentCatalog.defaultAgent;
-  }, [interactionMode, isOpenCodeThread, openCodeState.agentCatalog.defaultAgent, openCodeState.agentCatalog.planAgent]);
+  }, [
+    composerDraft.agent,
+    interactionMode,
+    isOpenCodeThread,
+    openCodeState.agentCatalog.defaultAgent,
+    openCodeState.agentCatalog.planAgent,
+  ]);
   const hasThreadStarted = Boolean(
     activeThread &&
     (activeThread.latestTurn !== null ||
@@ -1896,15 +1907,28 @@ export default function ChatView({ threadId }: ChatViewProps) {
         return;
       }
       setComposerDraftInteractionMode(threadId, mode);
+      if (isOpenCodeThread) {
+        const nextAgent =
+          mode === "plan"
+            ? openCodeState.agentCatalog.planAgent
+            : composerDraft.agent === openCodeState.agentCatalog.planAgent
+            ? null
+            : composerDraft.agent;
+        setComposerDraftAgent(threadId, nextAgent);
+      }
       if (isLocalDraftThread) {
         setDraftThreadContext(threadId, { interactionMode: mode });
       }
       scheduleComposerFocus();
     },
     [
+      composerDraft.agent,
       interactionMode,
+      isOpenCodeThread,
       isLocalDraftThread,
+      openCodeState.agentCatalog.planAgent,
       scheduleComposerFocus,
+      setComposerDraftAgent,
       setComposerDraftInteractionMode,
       setDraftThreadContext,
       setThreadError,
@@ -1915,6 +1939,25 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const toggleInteractionMode = useCallback(() => {
     handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
   }, [handleInteractionModeChange, interactionMode]);
+
+  const handleOpenCodeAgentChange = useCallback(
+    (agent: string) => {
+      setComposerDraftAgent(threadId, agent);
+      if (agent === openCodeState.agentCatalog.planAgent) {
+        setComposerDraftInteractionMode(threadId, "plan");
+      } else {
+        setComposerDraftInteractionMode(threadId, "default");
+      }
+      scheduleComposerFocus();
+    },
+    [
+      openCodeState.agentCatalog.planAgent,
+      scheduleComposerFocus,
+      setComposerDraftAgent,
+      setComposerDraftInteractionMode,
+      threadId,
+    ],
+  );
 
   const persistThreadSettingsForNextTurn = useCallback(
     async (input: {
@@ -4197,6 +4240,17 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     onProviderModelChange={onProviderModelSelect}
                   />
 
+                  {isOpenCodeThread && openCodeState.agentCatalog.visible.length > 0 ? (
+                    <>
+                      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+                      <OpenCodeAgentPicker
+                        agents={openCodeState.agentCatalog.visible}
+                        selectedAgent={openCodeSelectedAgent}
+                        onSelectAgent={handleOpenCodeAgentChange}
+                      />
+                    </>
+                  ) : null}
+
                   {selectedProvider === "codex" && selectedEffort != null ? (
                     <>
                       <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
@@ -6170,6 +6224,46 @@ const OpenCodeTodoDock = memo(function OpenCodeTodoDock(props: {
         </div>
       ) : null}
     </div>
+  );
+});
+
+const OpenCodeAgentPicker = memo(function OpenCodeAgentPicker(props: {
+  agents: ReadonlyArray<OpenCodeAgent>;
+  selectedAgent: string | null;
+  onSelectAgent: (agent: string) => void;
+}) {
+  const label = props.selectedAgent ?? "Agent";
+
+  return (
+    <Menu>
+      <MenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+            size="sm"
+            type="button"
+          >
+            <OpenCodeIcon />
+            <span className="max-w-28 truncate">{label}</span>
+          </Button>
+        }
+      />
+      <MenuPopup align="start" className="min-w-56">
+        <MenuGroup>
+          {props.agents.map((agent) => (
+            <MenuItem key={agent.name} onClick={() => props.onSelectAgent(agent.name)}>
+              <div className="min-w-0">
+                <div className="truncate text-sm text-foreground">{agent.name}</div>
+                {agent.description ? (
+                  <div className="truncate text-xs text-muted-foreground">{agent.description}</div>
+                ) : null}
+              </div>
+            </MenuItem>
+          ))}
+        </MenuGroup>
+      </MenuPopup>
+    </Menu>
   );
 });
 

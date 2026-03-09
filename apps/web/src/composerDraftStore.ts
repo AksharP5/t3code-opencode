@@ -37,6 +37,7 @@ interface PersistedComposerThreadDraftState {
   prompt: string;
   attachments: PersistedComposerImageAttachment[];
   provider?: ProviderKind | null;
+  agent?: string | null;
   model?: string | null;
   runtimeMode?: RuntimeMode | null;
   interactionMode?: ProviderInteractionMode | null;
@@ -68,6 +69,7 @@ interface ComposerThreadDraftState {
   nonPersistedImageIds: string[];
   persistedAttachments: PersistedComposerImageAttachment[];
   provider: ProviderKind | null;
+  agent: string | null;
   model: string | null;
   runtimeMode: RuntimeMode | null;
   interactionMode: ProviderInteractionMode | null;
@@ -127,6 +129,7 @@ interface ComposerDraftStoreState {
   clearDraftThread: (threadId: ThreadId) => void;
   setPrompt: (threadId: ThreadId, prompt: string) => void;
   setProvider: (threadId: ThreadId, provider: ProviderKind | null | undefined) => void;
+  setAgent: (threadId: ThreadId, agent: string | null | undefined) => void;
   setModel: (threadId: ThreadId, model: string | null | undefined) => void;
   setRuntimeMode: (threadId: ThreadId, runtimeMode: RuntimeMode | null | undefined) => void;
   setInteractionMode: (
@@ -165,6 +168,7 @@ const EMPTY_THREAD_DRAFT = Object.freeze({
   nonPersistedImageIds: EMPTY_IDS,
   persistedAttachments: EMPTY_PERSISTED_ATTACHMENTS,
   provider: null,
+  agent: null,
   model: null,
   runtimeMode: null,
   interactionMode: null,
@@ -183,6 +187,7 @@ function createEmptyThreadDraft(): ComposerThreadDraftState {
     nonPersistedImageIds: [],
     persistedAttachments: [],
     provider: null,
+    agent: null,
     model: null,
     runtimeMode: null,
     interactionMode: null,
@@ -203,6 +208,7 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
     draft.images.length === 0 &&
     draft.persistedAttachments.length === 0 &&
     draft.provider === null &&
+    draft.agent === null &&
     draft.model === null &&
     draft.runtimeMode === null &&
     draft.interactionMode === null &&
@@ -378,6 +384,9 @@ function normalizePersistedComposerDraftState(value: unknown): PersistedComposer
         })
       : [];
     const provider = normalizeProviderKind(draftCandidate.provider);
+    const agent = typeof draftCandidate.agent === "string" && draftCandidate.agent.trim().length > 0
+      ? draftCandidate.agent.trim()
+      : null;
     const model =
       typeof draftCandidate.model === "string"
         ? normalizeModelSlug(draftCandidate.model, provider ?? "codex")
@@ -404,6 +413,7 @@ function normalizePersistedComposerDraftState(value: unknown): PersistedComposer
       prompt.length === 0 &&
       attachments.length === 0 &&
       !provider &&
+      !agent &&
       !model &&
       !runtimeMode &&
       !interactionMode &&
@@ -416,6 +426,7 @@ function normalizePersistedComposerDraftState(value: unknown): PersistedComposer
       prompt,
       attachments,
       ...(provider ? { provider } : {}),
+      ...(agent ? { agent } : {}),
       ...(model ? { model } : {}),
       ...(runtimeMode ? { runtimeMode } : {}),
       ...(interactionMode ? { interactionMode } : {}),
@@ -523,6 +534,7 @@ function toHydratedThreadDraft(
     nonPersistedImageIds: [],
     persistedAttachments: persistedDraft.attachments,
     provider: persistedDraft.provider ?? null,
+    agent: persistedDraft.agent ?? null,
     model: persistedDraft.model ?? null,
     runtimeMode: persistedDraft.runtimeMode ?? null,
     interactionMode: persistedDraft.interactionMode ?? null,
@@ -816,6 +828,33 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
           const nextDraft: ComposerThreadDraftState = {
             ...base,
             provider: normalizedProvider,
+          };
+          const nextDraftsByThreadId = { ...state.draftsByThreadId };
+          if (shouldRemoveDraft(nextDraft)) {
+            delete nextDraftsByThreadId[threadId];
+          } else {
+            nextDraftsByThreadId[threadId] = nextDraft;
+          }
+          return { draftsByThreadId: nextDraftsByThreadId };
+        });
+      },
+      setAgent: (threadId, agent) => {
+        if (threadId.length === 0) {
+          return;
+        }
+        const normalizedAgent = typeof agent === "string" && agent.trim().length > 0 ? agent.trim() : null;
+        set((state) => {
+          const existing = state.draftsByThreadId[threadId];
+          if (!existing && normalizedAgent === null) {
+            return state;
+          }
+          const base = existing ?? createEmptyThreadDraft();
+          if (base.agent === normalizedAgent) {
+            return state;
+          }
+          const nextDraft: ComposerThreadDraftState = {
+            ...base,
+            agent: normalizedAgent,
           };
           const nextDraftsByThreadId = { ...state.draftsByThreadId };
           if (shouldRemoveDraft(nextDraft)) {
@@ -1201,6 +1240,7 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
             draft.prompt.length === 0 &&
             draft.persistedAttachments.length === 0 &&
             draft.provider === null &&
+            draft.agent === null &&
             draft.model === null &&
             draft.runtimeMode === null &&
             draft.interactionMode === null &&
@@ -1218,6 +1258,9 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
           }
           if (draft.provider) {
             persistedDraft.provider = draft.provider;
+          }
+          if (draft.agent) {
+            persistedDraft.agent = draft.agent;
           }
           if (draft.runtimeMode) {
             persistedDraft.runtimeMode = draft.runtimeMode;
