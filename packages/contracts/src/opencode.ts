@@ -186,6 +186,16 @@ export const OpenCodeTodo = Schema.Struct({
 });
 export type OpenCodeTodo = typeof OpenCodeTodo.Type;
 
+export const OpenCodeFileDiff = Schema.Struct({
+  file: Schema.String,
+  before: Schema.String,
+  after: Schema.String,
+  additions: Schema.Number,
+  deletions: Schema.Number,
+  status: Schema.optional(Schema.Literals(["added", "deleted", "modified"])),
+});
+export type OpenCodeFileDiff = typeof OpenCodeFileDiff.Type;
+
 export const OpenCodeSessionSummary = Schema.Struct({
   id: OpenCodeIdentifier,
   slug: Schema.optional(Schema.String),
@@ -390,6 +400,9 @@ export type OpenCodeGetSessionInput = typeof OpenCodeGetSessionInput.Type;
 
 export const OpenCodeGetTodoInput = OpenCodeGetSessionInput;
 export type OpenCodeGetTodoInput = typeof OpenCodeGetTodoInput.Type;
+
+export const OpenCodeGetDiffInput = OpenCodeGetSessionInput;
+export type OpenCodeGetDiffInput = typeof OpenCodeGetDiffInput.Type;
 
 export const OpenCodeListPermissionsInput = OpenCodeServerConfigInput;
 export type OpenCodeListPermissionsInput = typeof OpenCodeListPermissionsInput.Type;

@@ -27,6 +27,8 @@ import type {
   OpenCodeDeleteSessionInput,
   OpenCodeForkSessionInput,
   OpenCodeAgent,
+  OpenCodeFileDiff,
+  OpenCodeGetDiffInput,
   OpenCodeGetTodoInput,
   OpenCodeGetVcsInput,
   OpenCodeEvent,
@@ -187,6 +189,7 @@ export interface NativeApi {
     listSessions: (input: OpenCodeListSessionsInput) => Promise<OpenCodeSessionSummary[]>;
     getSession: (input: OpenCodeGetSessionInput) => Promise<OpenCodeSession>;
     getMessages: (input: OpenCodeGetSessionInput) => Promise<OpenCodeMessage[]>;
+    getDiff: (input: OpenCodeGetDiffInput) => Promise<OpenCodeFileDiff[]>;
     getTodo: (input: OpenCodeGetTodoInput) => Promise<OpenCodeTodo[]>;
     getStatuses: (input: OpenCodeListProjectsInput) => Promise<OpenCodeSessionStatusMap>;
     listPermissions: (input: OpenCodeListPermissionsInput) => Promise<OpenCodePermissionRequest[]>;

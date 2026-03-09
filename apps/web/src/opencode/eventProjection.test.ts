@@ -148,6 +148,45 @@ describe("applyOpenCodeEventToQueryCache", () => {
     ]);
   });
 
+  it("updates cached diffs from session diff events", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = opencodeQueryKeys.diff({ ...config, sessionId: "session-1" });
+    queryClient.setQueryData(queryKey, []);
+
+    await applyOpenCodeEventToQueryCache(
+      queryClient,
+      makeEvent({
+        payload: {
+          type: "session.diff",
+          properties: {
+            sessionID: "session-1",
+            diff: [
+              {
+                file: "src/app.ts",
+                before: "old",
+                after: "new",
+                additions: 3,
+                deletions: 1,
+                status: "modified",
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(queryClient.getQueryData(queryKey)).toEqual([
+      {
+        file: "src/app.ts",
+        before: "old",
+        after: "new",
+        additions: 3,
+        deletions: 1,
+        status: "modified",
+      },
+    ]);
+  });
+
   it("updates status, session details, and vcs branch for the active directory", async () => {
     const queryClient = new QueryClient();
     const statusesKey = opencodeQueryKeys.statuses(config);

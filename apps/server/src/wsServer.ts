@@ -996,6 +996,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeGetDiff: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.getDiff(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to get OpenCode diff: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeGetTodo: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({

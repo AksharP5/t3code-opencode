@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import type {
+  OpenCodeGetDiffInput,
   OpenCodeGetVcsInput,
   OpenCodeGetSessionInput,
   OpenCodeGetTodoInput,
@@ -20,6 +21,7 @@ export const opencodeQueryKeys = {
   sessions: (input: OpenCodeListSessionsInput) => ["opencode", "sessions", input] as const,
   session: (input: OpenCodeGetSessionInput) => ["opencode", "session", input] as const,
   messages: (input: OpenCodeGetSessionInput) => ["opencode", "messages", input] as const,
+  diff: (input: OpenCodeGetDiffInput) => ["opencode", "diff", input] as const,
   todo: (input: OpenCodeGetTodoInput) => ["opencode", "todo", input] as const,
   statuses: (input: OpenCodeListProjectsInput) => ["opencode", "statuses", input] as const,
   permissions: (input: OpenCodeListPermissionsInput) => ["opencode", "permissions", input] as const,
@@ -104,6 +106,16 @@ export function opencodeTodoQueryOptions(input: OpenCodeGetTodoInput) {
   return queryOptions({
     queryKey: opencodeQueryKeys.todo(input),
     queryFn: async () => ensureNativeApi().opencode.getTodo(input),
+    staleTime: 0,
+    refetchOnReconnect: true,
+    refetchInterval: 2_000,
+  });
+}
+
+export function opencodeDiffQueryOptions(input: OpenCodeGetDiffInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.diff(input),
+    queryFn: async () => ensureNativeApi().opencode.getDiff(input),
     staleTime: 0,
     refetchOnReconnect: true,
     refetchInterval: 2_000,

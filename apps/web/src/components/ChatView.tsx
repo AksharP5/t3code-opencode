@@ -11,6 +11,7 @@ import {
   type OpenCodeSendMessageInput,
   type OpenCodeProviderCatalog,
   type OpenCodeAgent,
+  type OpenCodeFileDiff,
   type OpenCodeTodo,
   type ProjectId,
   type ProjectEntry,
@@ -4056,6 +4057,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       {/* Input bar */}
       <div className={cn("px-3 pt-1.5 sm:px-5 sm:pt-2", isGitRepo ? "pb-1" : "pb-3 sm:pb-4")}>
+        {isOpenCodeThread && openCodeState.activeDiff.length > 0 ? (
+          <div className="mx-auto mb-2 w-full max-w-3xl">
+            <OpenCodeDiffDock diff={openCodeState.activeDiff} />
+          </div>
+        ) : null}
         {isOpenCodeThread && openCodeState.activeTodos.length > 0 ? (
           <div className="mx-auto mb-2 w-full max-w-3xl">
             <OpenCodeTodoDock todos={openCodeState.activeTodos} />
@@ -6218,6 +6224,48 @@ const OpenCodeTodoDock = memo(function OpenCodeTodoDock(props: {
                     {todo.status.replaceAll("_", " ")} - {todo.priority}
                   </p>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+});
+
+const OpenCodeDiffDock = memo(function OpenCodeDiffDock(props: {
+  diff: ReadonlyArray<OpenCodeFileDiff>;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const additions = props.diff.reduce((sum, file) => sum + file.additions, 0);
+  const deletions = props.diff.reduce((sum, file) => sum + file.deletions, 0);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card/80 backdrop-blur-sm">
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 px-3 py-2 text-left"
+        onClick={() => setCollapsed((value) => !value)}
+      >
+        <span className="text-xs font-medium text-foreground">
+          {props.diff.length} changed file{props.diff.length === 1 ? "" : "s"}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          +{additions} / -{deletions}
+        </span>
+        <ChevronDownIcon
+          className={cn("size-4 text-muted-foreground transition-transform", collapsed ? "rotate-180" : "")}
+        />
+      </button>
+
+      {!collapsed ? (
+        <div className="border-t border-border/70 px-3 py-2">
+          <div className="space-y-2">
+            {props.diff.map((file) => (
+              <div key={file.file} className="flex items-center gap-3 text-xs">
+                <span className="min-w-0 flex-1 truncate text-foreground">{file.file}</span>
+                <span className="shrink-0 text-emerald-600 dark:text-emerald-300">+{file.additions}</span>
+                <span className="shrink-0 text-rose-600 dark:text-rose-300">-{file.deletions}</span>
               </div>
             ))}
           </div>

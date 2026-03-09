@@ -7,6 +7,7 @@ import type {
   OpenCodeDeleteSessionInput,
   OpenCodeForkSessionInput,
   OpenCodeEvent,
+  OpenCodeGetDiffInput,
   OpenCodeGetVcsInput,
   OpenCodeGetSessionInput,
   OpenCodeGetTodoInput,
@@ -25,6 +26,7 @@ import {
   fetchOpenCodeHealth,
   forkOpenCodeSession,
   getOpenCodeMessages,
+  getOpenCodeDiff,
   getOpenCodeSession,
   getOpenCodeTodo,
   getOpenCodeStatuses,
@@ -140,6 +142,11 @@ export class OpenCodeBridge {
   async getMessages(input: OpenCodeGetSessionInput) {
     const config = await this.ensureReady(input);
     return getOpenCodeMessages(config, input.sessionId);
+  }
+
+  async getDiff(input: OpenCodeGetDiffInput) {
+    const config = await this.ensureReady(input);
+    return getOpenCodeDiff(input, config);
   }
 
   async getTodo(input: OpenCodeGetTodoInput) {

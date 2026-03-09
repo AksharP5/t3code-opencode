@@ -1,5 +1,6 @@
 import type {
   OpenCodeEvent,
+  OpenCodeFileDiff,
   OpenCodeMessage,
   OpenCodeMessageInfo,
   OpenCodeMessagePart,
@@ -85,6 +86,16 @@ export function applyOpenCodeEventToQueryCache(
     const status = asStatus(properties?.status);
     if (sessionId && status) {
       updateStatusesQueries(queryClient, sessionId, status);
+      return Promise.resolve();
+    }
+  }
+
+  if (type === "session.diff") {
+    const properties = asRecord(event.payload.properties);
+    const sessionId = asString(properties?.sessionID);
+    const diff = Array.isArray(properties?.diff) ? (properties.diff as OpenCodeFileDiff[]) : null;
+    if (sessionId && diff) {
+      updateDiffQueries(queryClient, sessionId, diff);
       return Promise.resolve();
     }
   }
@@ -336,6 +347,17 @@ function updateTodoQueries(queryClient: QueryClient, sessionId: string, todos: O
       continue;
     }
     queryClient.setQueryData(queryKey, todos);
+  }
+}
+
+function updateDiffQueries(queryClient: QueryClient, sessionId: string, diff: OpenCodeFileDiff[]) {
+  for (const [queryKey] of queryClient.getQueriesData<OpenCodeFileDiff[]>({
+    queryKey: ["opencode", "diff"],
+  })) {
+    if (!sessionIdMatchesQueryInput(queryKey, sessionId)) {
+      continue;
+    }
+    queryClient.setQueryData(queryKey, diff);
   }
 }
 

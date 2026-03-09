@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createOpenCodeSession,
   fetchOpenCodeHealth,
+  getOpenCodeDiff,
   forkOpenCodeSession,
   getOpenCodeTodo,
   getOpenCodeVcs,
@@ -230,6 +231,44 @@ describe("opencode client", () => {
 
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/todo");
+  });
+
+  it("loads session diffs", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          file: "src/app.ts",
+          before: "old",
+          after: "new",
+          additions: 3,
+          deletions: 1,
+          status: "modified",
+        },
+      ],
+    } as Response);
+
+    await expect(
+      getOpenCodeDiff(
+        {
+          ...config,
+          sessionId: "session-1",
+        },
+        config,
+      ),
+    ).resolves.toEqual([
+      {
+        file: "src/app.ts",
+        before: "old",
+        after: "new",
+        additions: 3,
+        deletions: 1,
+        status: "modified",
+      },
+    ]);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/diff");
   });
 
   it("replies to OpenCode permission prompts", async () => {

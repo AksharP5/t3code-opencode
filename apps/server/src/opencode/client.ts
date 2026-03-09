@@ -1,6 +1,8 @@
 import type {
   OpenCodeAgent,
   OpenCodeDeleteSessionInput,
+  OpenCodeFileDiff,
+  OpenCodeGetDiffInput,
   OpenCodeForkSessionInput,
   OpenCodeCreateSessionInput,
   OpenCodeEvent,
@@ -29,6 +31,7 @@ import {
   OpenCodeProject as OpenCodeProjectSchema,
   OpenCodeSession as OpenCodeSessionSchema,
   OpenCodeSessionStatusMap as OpenCodeSessionStatusMapSchema,
+  OpenCodeFileDiff as OpenCodeFileDiffSchema,
   OpenCodeTodo as OpenCodeTodoSchema,
   OpenCodeSessionSummary as OpenCodeSessionSummarySchema,
   OpenCodeVcsInfo as OpenCodeVcsInfoSchema,
@@ -42,6 +45,7 @@ const decodeProviderCatalog = Schema.decodeUnknownSync(OpenCodeProviderCatalogSc
 const decodeSessions = Schema.decodeUnknownSync(Schema.Array(OpenCodeSessionSummarySchema));
 const decodeSession = Schema.decodeUnknownSync(OpenCodeSessionSchema);
 const decodeMessages = Schema.decodeUnknownSync(Schema.Array(OpenCodeMessageSchema));
+const decodeDiff = Schema.decodeUnknownSync(Schema.Array(OpenCodeFileDiffSchema));
 const decodeTodo = Schema.decodeUnknownSync(Schema.Array(OpenCodeTodoSchema));
 const decodeStatuses = Schema.decodeUnknownSync(OpenCodeSessionStatusMapSchema);
 const decodePermissions = Schema.decodeUnknownSync(Schema.Array(OpenCodePermissionRequestSchema));
@@ -166,6 +170,22 @@ export async function getOpenCodeTodo(
     throw new Error(`OpenCode todo lookup failed with ${response.status}.`);
   }
   return Array.from(decodeTodo(await response.json()));
+}
+
+export async function getOpenCodeDiff(
+  input: OpenCodeGetDiffInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeFileDiff[]> {
+  const response = await fetch(
+    `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/diff`,
+    {
+      headers: buildHeaders(config),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode diff lookup failed with ${response.status}.`);
+  }
+  return Array.from(decodeDiff(await response.json()));
 }
 
 export async function getOpenCodeStatuses(

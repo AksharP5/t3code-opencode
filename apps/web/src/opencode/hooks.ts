@@ -14,6 +14,7 @@ import {
 import { useOpenCodeProjectOverlayStore } from "./projectOverlayStore";
 import {
   opencodeAgentsQueryOptions,
+  opencodeDiffQueryOptions,
   opencodePermissionsQueryOptions,
   opencodeMessagesQueryOptions,
   opencodeProvidersQueryOptions,
@@ -78,6 +79,10 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
   });
   const todoQuery = useQuery({
     ...opencodeTodoQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
+    enabled: statusQuery.data?.healthy === true && threadId !== undefined,
+  });
+  const diffQuery = useQuery({
+    ...opencodeDiffQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
     enabled: statusQuery.data?.healthy === true && threadId !== undefined,
   });
   const agentCatalog = useMemo(() => buildOpenCodeAgentCatalog(agentsQuery.data), [agentsQuery.data]);
@@ -181,6 +186,7 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     providerCatalog: providersQuery.data ?? null,
     pendingPermissions: permissionsQuery.data ?? [],
     activeTodos: todoQuery.data ?? [],
+    activeDiff: diffQuery.data ?? [],
     projects,
     threads,
     activeThread,
