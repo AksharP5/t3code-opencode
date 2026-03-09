@@ -185,7 +185,12 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
 
   const activeThreadWithDiff = useMemo(() => {
     const activeDiff = diffQuery.data ?? [];
-    if (!activeThread || activeDiff.length === 0 || !activeThread.latestTurn?.turnId) {
+    if (
+      !activeThread ||
+      activeThread.turnDiffSummaries.length > 0 ||
+      activeDiff.length === 0 ||
+      !activeThread.latestTurn?.turnId
+    ) {
       return activeThread;
     }
 

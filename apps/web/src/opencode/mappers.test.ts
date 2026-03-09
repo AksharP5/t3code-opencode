@@ -245,6 +245,18 @@ describe("OpenCode mappers", () => {
             id: "message-user",
             sessionID: "session-1",
             role: "user",
+            summary: {
+              diffs: [
+                {
+                  file: "src/app.ts",
+                  before: "old",
+                  after: "new",
+                  additions: 3,
+                  deletions: 1,
+                  status: "modified",
+                },
+              ],
+            },
             time: { created: 1 },
           },
         }),
@@ -267,6 +279,21 @@ describe("OpenCode mappers", () => {
       state: "completed",
       assistantMessageId: "message-assistant",
     });
+    expect(thread.turnDiffSummaries).toEqual([
+      {
+        turnId: "opencode-turn-message-user",
+        completedAt: new Date(3).toISOString(),
+        assistantMessageId: "message-assistant",
+        files: [
+          {
+            path: "src/app.ts",
+            kind: "modified",
+            additions: 3,
+            deletions: 1,
+          },
+        ],
+      },
+    ]);
   });
 
   it("renders assistant tool-only messages into readable fallback text", () => {

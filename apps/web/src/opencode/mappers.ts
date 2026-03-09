@@ -3,6 +3,7 @@ import {
   EventId,
   MessageId,
   type OpenCodeAgent,
+  type OpenCodeFileDiff,
   type OpenCodeMessage,
   type OpenCodeMessagePart,
   type OpenCodeProviderCatalog,
@@ -191,6 +192,7 @@ export function mapOpenCodeThreadDetail(input: {
       projectCwd: input.projectCwd,
       messages: input.messages,
     }),
+    turnDiffSummaries: deriveTurnDiffSummaries(input.messages),
     activities: mergeOpenCodeActivities(input.messages, input.activities ?? []),
     parentThreadId: input.session.parentID ? ThreadId.makeUnsafe(input.session.parentID) : null,
     workspaceId: input.session.workspaceID ?? null,
@@ -224,6 +226,43 @@ function deriveOpenCodeProposedPlans(
         planMarkdown,
         createdAt: toIso(message.info.time.created),
         updatedAt,
+      },
+    ];
+  });
+}
+
+function deriveTurnDiffSummaries(messages: OpenCodeMessage[]): Thread["turnDiffSummaries"] {
+  return messages.flatMap((message, index) => {
+    if (message.info.role !== "user") {
+      return [];
+    }
+    const diffs = extractMessageSummaryDiffs(message.info.summary);
+    if (!diffs || diffs.length === 0) {
+      return [];
+    }
+    const assistant = messages.slice(index + 1).find((candidate) => {
+      if (candidate.info.role !== "assistant") {
+        return false;
+      }
+      if (candidate.info.parentID) {
+        return candidate.info.parentID === message.info.id;
+      }
+      return true;
+    });
+    const completedAt = toIso(
+      assistant?.info.time.completed ?? assistant?.info.time.end ?? assistant?.info.time.created ?? message.info.time.created,
+    );
+    return [
+      {
+        turnId: TurnId.makeUnsafe(`opencode-turn-${message.info.id}`),
+        completedAt,
+        assistantMessageId: assistant ? MessageId.makeUnsafe(assistant.info.id) : undefined,
+        files: diffs.map((diff) => ({
+          path: diff.file,
+          kind: diff.status,
+          additions: diff.additions,
+          deletions: diff.deletions,
+        })),
       },
     ];
   });
@@ -388,6 +427,44 @@ function buildToolActivityPayload(part: OpenCodeMessagePart): Record<string, unk
       },
     },
   };
+}
+
+function extractMessageSummaryDiffs(summary: unknown): OpenCodeFileDiff[] | null {
+  if (!summary || typeof summary !== "object") {
+    return null;
+  }
+  const record = summary as Record<string, unknown>;
+  if (!Array.isArray(record.diffs)) {
+    return null;
+  }
+  const diffs = record.diffs.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return [];
+    }
+    const diff = entry as Record<string, unknown>;
+    if (
+      typeof diff.file !== "string" ||
+      typeof diff.before !== "string" ||
+      typeof diff.after !== "string" ||
+      typeof diff.additions !== "number" ||
+      typeof diff.deletions !== "number"
+    ) {
+      return [];
+    }
+    return [
+      {
+        file: diff.file,
+        before: diff.before,
+        after: diff.after,
+        additions: diff.additions,
+        deletions: diff.deletions,
+        ...(diff.status === "added" || diff.status === "deleted" || diff.status === "modified"
+          ? { status: diff.status }
+          : {}),
+      } satisfies OpenCodeFileDiff,
+    ];
+  });
+  return diffs.length > 0 ? diffs : null;
 }
 
 export function resolveProjectIdForSession(
