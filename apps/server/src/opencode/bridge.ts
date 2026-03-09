@@ -7,10 +7,13 @@ import type {
   OpenCodeDeleteSessionInput,
   OpenCodeForkSessionInput,
   OpenCodeEvent,
+  OpenCodeAuthorizeProviderInput,
+  OpenCodeCompleteProviderAuthInput,
   OpenCodeGetDiffInput,
   OpenCodeGetVcsInput,
   OpenCodeGetSessionInput,
   OpenCodeGetTodoInput,
+  OpenCodeListProviderAuthMethodsInput,
   OpenCodeListProjectsInput,
   OpenCodeListPermissionsInput,
   OpenCodeListQuestionsInput,
@@ -19,7 +22,9 @@ import type {
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
   OpenCodeRevertSessionInput,
+  OpenCodeRemoveProviderAuthInput,
   OpenCodeSendMessageInput,
+  OpenCodeSetProviderApiKeyInput,
   OpenCodeShareSessionInput,
   OpenCodeStatus,
   OpenCodeUnrevertSessionInput,
@@ -27,7 +32,9 @@ import type {
   OpenCodeUpdateSessionInput,
 } from "@t3tools/contracts";
 import {
+  authorizeOpenCodeProvider,
   abortOpenCodeSession,
+  completeOpenCodeProviderAuth,
   createOpenCodeSession,
   deleteOpenCodeSession,
   fetchOpenCodeHealth,
@@ -39,6 +46,7 @@ import {
   getOpenCodeStatuses,
   getOpenCodeVcs,
   listOpenCodeAgents,
+  listOpenCodeProviderAuthMethods,
   listOpenCodeProviders,
   listOpenCodePermissions,
   listOpenCodeQuestions,
@@ -47,7 +55,9 @@ import {
   replyOpenCodePermission,
   replyOpenCodeQuestion,
   rejectOpenCodeQuestion,
+  removeOpenCodeProviderAuth,
   revertOpenCodeSession,
+  setOpenCodeProviderApiKey,
   sendOpenCodeMessage,
   shareOpenCodeSession,
   streamOpenCodeEvents,
@@ -131,6 +141,31 @@ export class OpenCodeBridge {
   async listProviders(input: OpenCodeListProjectsInput) {
     const config = await this.ensureReady(input);
     return listOpenCodeProviders(config);
+  }
+
+  async listProviderAuthMethods(input: OpenCodeListProviderAuthMethodsInput) {
+    const config = await this.ensureReady(input);
+    return listOpenCodeProviderAuthMethods(config);
+  }
+
+  async authorizeProvider(input: OpenCodeAuthorizeProviderInput) {
+    const config = await this.ensureReady(input);
+    return authorizeOpenCodeProvider(input, config);
+  }
+
+  async completeProviderAuth(input: OpenCodeCompleteProviderAuthInput) {
+    const config = await this.ensureReady(input);
+    return completeOpenCodeProviderAuth(input, config);
+  }
+
+  async setProviderApiKey(input: OpenCodeSetProviderApiKeyInput) {
+    const config = await this.ensureReady(input);
+    return setOpenCodeProviderApiKey(input, config);
+  }
+
+  async removeProviderAuth(input: OpenCodeRemoveProviderAuthInput) {
+    const config = await this.ensureReady(input);
+    return removeOpenCodeProviderAuth(input, config);
   }
 
   async listAgents(input: OpenCodeListAgentsInput) {

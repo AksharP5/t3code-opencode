@@ -5,6 +5,7 @@ import type {
   OpenCodeGetSessionInput,
   OpenCodeGetTodoInput,
   OpenCodeListAgentsInput,
+  OpenCodeListProviderAuthMethodsInput,
   OpenCodeListPermissionsInput,
   OpenCodeListQuestionsInput,
   OpenCodeListProvidersInput,
@@ -17,6 +18,7 @@ export const opencodeQueryKeys = {
   all: ["opencode"] as const,
   status: (input: OpenCodeListProjectsInput) => ["opencode", "status", input] as const,
   providers: (input: OpenCodeListProvidersInput) => ["opencode", "providers", input] as const,
+  providerAuthMethods: (input: OpenCodeListProviderAuthMethodsInput) => ["opencode", "providerAuthMethods", input] as const,
   agents: (input: OpenCodeListAgentsInput) => ["opencode", "agents", input] as const,
   projects: (input: OpenCodeListProjectsInput) => ["opencode", "projects", input] as const,
   sessions: (input: OpenCodeListSessionsInput) => ["opencode", "sessions", input] as const,
@@ -62,6 +64,15 @@ export function opencodeProvidersQueryOptions(input: OpenCodeListProvidersInput)
   return queryOptions({
     queryKey: opencodeQueryKeys.providers(input),
     queryFn: async () => ensureNativeApi().opencode.listProviders(input),
+    staleTime: 30_000,
+    refetchOnReconnect: true,
+  });
+}
+
+export function opencodeProviderAuthMethodsQueryOptions(input: OpenCodeListProviderAuthMethodsInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.providerAuthMethods(input),
+    queryFn: async () => ensureNativeApi().opencode.listProviderAuthMethods(input),
     staleTime: 30_000,
     refetchOnReconnect: true,
   });

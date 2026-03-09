@@ -10,15 +10,21 @@ import type {
   OpenCodeGetVcsInput,
   OpenCodeMessage,
   OpenCodePermissionRequest,
+  OpenCodeProviderAuthMethod,
+  OpenCodeProviderAuthorization,
   OpenCodeQuestionRequest,
   OpenCodeProviderCatalog,
   OpenCodeReplyPermissionInput,
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
   OpenCodeRevertSessionInput,
+  OpenCodeAuthorizeProviderInput,
+  OpenCodeCompleteProviderAuthInput,
+  OpenCodeRemoveProviderAuthInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeShareSessionInput,
+  OpenCodeSetProviderApiKeyInput,
   OpenCodeSessionStatusMap,
   OpenCodeSessionSummary,
   OpenCodeStatus,
@@ -34,6 +40,8 @@ import {
   OpenCodeEvent as OpenCodeEventSchema,
   OpenCodeMessage as OpenCodeMessageSchema,
   OpenCodePermissionRequest as OpenCodePermissionRequestSchema,
+  OpenCodeProviderAuthMethod as OpenCodeProviderAuthMethodSchema,
+  OpenCodeProviderAuthorization as OpenCodeProviderAuthorizationSchema,
   OpenCodeQuestionRequest as OpenCodeQuestionRequestSchema,
   OpenCodeProviderCatalog as OpenCodeProviderCatalogSchema,
   OpenCodeProject as OpenCodeProjectSchema,
@@ -57,6 +65,12 @@ const decodeDiff = Schema.decodeUnknownSync(Schema.Array(OpenCodeFileDiffSchema)
 const decodeTodo = Schema.decodeUnknownSync(Schema.Array(OpenCodeTodoSchema));
 const decodeStatuses = Schema.decodeUnknownSync(OpenCodeSessionStatusMapSchema);
 const decodePermissions = Schema.decodeUnknownSync(Schema.Array(OpenCodePermissionRequestSchema));
+const decodeProviderAuthMethods = Schema.decodeUnknownSync(
+  Schema.Record(Schema.String, Schema.Array(OpenCodeProviderAuthMethodSchema)),
+);
+const decodeProviderAuthorization = Schema.decodeUnknownSync(
+  Schema.NullOr(OpenCodeProviderAuthorizationSchema),
+);
 const decodeQuestions = Schema.decodeUnknownSync(Schema.Array(OpenCodeQuestionRequestSchema));
 const decodeEvent = Schema.decodeUnknownSync(OpenCodeEventSchema);
 const decodeVcsInfo = Schema.decodeUnknownSync(OpenCodeVcsInfoSchema);
@@ -98,6 +112,93 @@ export async function listOpenCodeProviders(
     throw new Error(`OpenCode provider list failed with ${response.status}.`);
   }
   return decodeProviderCatalog(await response.json());
+}
+
+export async function listOpenCodeProviderAuthMethods(
+  config: ResolvedOpenCodeConfig,
+): Promise<Record<string, OpenCodeProviderAuthMethod[]>> {
+  const response = await fetch(`${config.baseUrl}/provider/auth`, {
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode provider auth methods failed with ${response.status}.`);
+  }
+  const methods = decodeProviderAuthMethods(await response.json());
+  return Object.fromEntries(Object.entries(methods).map(([providerId, entries]) => [providerId, Array.from(entries)]));
+}
+
+export async function authorizeOpenCodeProvider(
+  input: OpenCodeAuthorizeProviderInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeProviderAuthorization | null> {
+  const response = await fetch(
+    `${config.baseUrl}/provider/${encodeURIComponent(input.providerId)}/oauth/authorize`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify({ method: input.method }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode provider authorization failed with ${response.status}.`);
+  }
+  return decodeProviderAuthorization(await response.json());
+}
+
+export async function completeOpenCodeProviderAuth(
+  input: OpenCodeCompleteProviderAuthInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(
+    `${config.baseUrl}/provider/${encodeURIComponent(input.providerId)}/oauth/callback`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify({
+        method: input.method,
+        ...(input.code ? { code: input.code } : {}),
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode provider auth completion failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
+}
+
+export async function setOpenCodeProviderApiKey(
+  input: OpenCodeSetProviderApiKeyInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(
+    `${config.baseUrl}/provider/${encodeURIComponent(input.providerId)}/api`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify({ key: input.apiKey }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode provider API key setup failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
+}
+
+export async function removeOpenCodeProviderAuth(
+  input: OpenCodeRemoveProviderAuthInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(
+    `${config.baseUrl}/provider/${encodeURIComponent(input.providerId)}/auth`,
+    {
+      method: "DELETE",
+      headers: buildHeaders(config),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode provider auth removal failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
 }
 
 export async function listOpenCodeAgents(config: ResolvedOpenCodeConfig): Promise<OpenCodeAgent[]> {

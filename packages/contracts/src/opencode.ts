@@ -125,6 +125,19 @@ export const OpenCodeProviderCatalog = Schema.Struct({
 });
 export type OpenCodeProviderCatalog = typeof OpenCodeProviderCatalog.Type;
 
+export const OpenCodeProviderAuthMethod = Schema.Struct({
+  type: Schema.Literals(["oauth", "api"]),
+  label: Schema.String,
+});
+export type OpenCodeProviderAuthMethod = typeof OpenCodeProviderAuthMethod.Type;
+
+export const OpenCodeProviderAuthorization = Schema.Struct({
+  url: Schema.String,
+  method: Schema.Literals(["auto", "code"]),
+  instructions: Schema.String,
+});
+export type OpenCodeProviderAuthorization = typeof OpenCodeProviderAuthorization.Type;
+
 const OpenCodeSessionTime = Schema.Struct({
   created: OpenCodeTimestamp,
   updated: OpenCodeTimestamp,
@@ -431,6 +444,9 @@ export type OpenCodeListProjectsInput = typeof OpenCodeListProjectsInput.Type;
 export const OpenCodeListProvidersInput = OpenCodeServerConfigInput;
 export type OpenCodeListProvidersInput = typeof OpenCodeListProvidersInput.Type;
 
+export const OpenCodeListProviderAuthMethodsInput = OpenCodeServerConfigInput;
+export type OpenCodeListProviderAuthMethodsInput = typeof OpenCodeListProviderAuthMethodsInput.Type;
+
 export const OpenCodeListAgentsInput = OpenCodeServerConfigInput;
 export type OpenCodeListAgentsInput = typeof OpenCodeListAgentsInput.Type;
 
@@ -539,6 +555,34 @@ export type OpenCodeUnshareSessionInput = typeof OpenCodeUnshareSessionInput.Typ
 
 export const OpenCodeUnrevertSessionInput = OpenCodeShareSessionInput;
 export type OpenCodeUnrevertSessionInput = typeof OpenCodeUnrevertSessionInput.Type;
+
+export const OpenCodeSetProviderApiKeyInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  providerId: TrimmedNonEmptyString,
+  apiKey: TrimmedNonEmptyString,
+});
+export type OpenCodeSetProviderApiKeyInput = typeof OpenCodeSetProviderApiKeyInput.Type;
+
+export const OpenCodeRemoveProviderAuthInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  providerId: TrimmedNonEmptyString,
+});
+export type OpenCodeRemoveProviderAuthInput = typeof OpenCodeRemoveProviderAuthInput.Type;
+
+export const OpenCodeAuthorizeProviderInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  providerId: TrimmedNonEmptyString,
+  method: Schema.Number,
+});
+export type OpenCodeAuthorizeProviderInput = typeof OpenCodeAuthorizeProviderInput.Type;
+
+export const OpenCodeCompleteProviderAuthInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  providerId: TrimmedNonEmptyString,
+  method: Schema.Number,
+  code: Schema.optional(Schema.String),
+});
+export type OpenCodeCompleteProviderAuthInput = typeof OpenCodeCompleteProviderAuthInput.Type;
 
 export const OpenCodeDeleteSessionInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,

@@ -13,7 +13,11 @@ import { isElectron } from "../env";
 import { useTheme } from "../hooks/useTheme";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { ensureNativeApi } from "../nativeApi";
-import { opencodeStatusQueryOptions } from "../opencode/reactQuery";
+import {
+  opencodeProviderAuthMethodsQueryOptions,
+  opencodeProvidersQueryOptions,
+  opencodeStatusQueryOptions,
+} from "../opencode/reactQuery";
 import { preferredTerminalEditor } from "../terminal-links";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -100,12 +104,27 @@ function SettingsRouteView() {
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderKind, string | null>>
   >({});
+  const [providerApiKeyById, setProviderApiKeyById] = useState<Record<string, string>>({});
+  const [providerOauthCodeById, setProviderOauthCodeById] = useState<Record<string, string>>({});
+  const [providerAuthErrorById, setProviderAuthErrorById] = useState<Record<string, string | null>>({});
+  const [providerAuthPendingId, setProviderAuthPendingId] = useState<string | null>(null);
+  const [providerPendingOauthMethodById, setProviderPendingOauthMethodById] = useState<Record<string, number>>(
+    {},
+  );
 
   const codexBinaryPath = settings.codexBinaryPath;
   const codexHomePath = settings.codexHomePath;
   const openCodeConfig = buildOpenCodeServerConfigInput(settings);
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
   const openCodeStatusQuery = useQuery(opencodeStatusQueryOptions(openCodeConfig));
+  const openCodeProvidersQuery = useQuery({
+    ...opencodeProvidersQueryOptions(openCodeConfig),
+    enabled: openCodeStatusQuery.data?.healthy === true,
+  });
+  const openCodeProviderAuthMethodsQuery = useQuery({
+    ...opencodeProviderAuthMethodsQueryOptions(openCodeConfig),
+    enabled: openCodeStatusQuery.data?.healthy === true,
+  });
 
   const openKeybindingsFile = useCallback(() => {
     if (!keybindingsConfigPath) return;
@@ -139,6 +158,182 @@ function SettingsRouteView() {
         setIsEnsuringOpenCodeServer(false);
       });
   }, [openCodeConfig, openCodeStatusQuery]);
+
+  const refreshOpenCodeProviderQueries = useCallback(() => {
+    void openCodeProvidersQuery.refetch();
+    void openCodeProviderAuthMethodsQuery.refetch();
+  }, [openCodeProviderAuthMethodsQuery, openCodeProvidersQuery]);
+
+  const connectOpenCodeProvider = useCallback(
+    async (providerId: string) => {
+      const methods = openCodeProviderAuthMethodsQuery.data?.[providerId] ?? [];
+      if (methods.length === 0) {
+        return;
+      }
+
+      const api = ensureNativeApi();
+      let methodIndex = 0;
+      if (methods.length > 1) {
+        const selected = await api.contextMenu.show(
+          methods.map((method, index) => ({ id: String(index), label: method.label })),
+        );
+        if (!selected) {
+          return;
+        }
+        methodIndex = Number(selected);
+      }
+
+      const method = methods[methodIndex];
+      if (!method) {
+        return;
+      }
+
+      setProviderAuthErrorById((existing) => ({ ...existing, [providerId]: null }));
+      setProviderAuthPendingId(providerId);
+
+      if (method.type === "api") {
+        const apiKey = providerApiKeyById[providerId]?.trim();
+        if (!apiKey) {
+          setProviderAuthErrorById((existing) => ({
+            ...existing,
+            [providerId]: "Enter an API key first.",
+          }));
+          setProviderAuthPendingId(null);
+          return;
+        }
+        await api.opencode
+          .setProviderApiKey({
+            ...openCodeConfig,
+            providerId,
+            apiKey,
+          })
+          .then(() => {
+            setProviderApiKeyById((existing) => ({ ...existing, [providerId]: "" }));
+            refreshOpenCodeProviderQueries();
+          })
+          .catch((error: unknown) => {
+            setProviderAuthErrorById((existing) => ({
+              ...existing,
+              [providerId]: error instanceof Error ? error.message : "Failed to save API key.",
+            }));
+          })
+          .finally(() => {
+            setProviderAuthPendingId(null);
+          });
+        return;
+      }
+
+      await api.opencode
+        .authorizeProvider({
+          ...openCodeConfig,
+          providerId,
+          method: methodIndex,
+        })
+        .then(async (authorization) => {
+          if (!authorization) {
+            return;
+          }
+          await api.shell.openExternal(authorization.url);
+          if (authorization.method === "auto") {
+            const confirmed = await api.dialogs.confirm(
+              `${authorization.instructions}\n\nClick OK after you finish authorization in the browser.`,
+            );
+            if (!confirmed) {
+              return;
+            }
+            await api.opencode.completeProviderAuth({
+              ...openCodeConfig,
+              providerId,
+              method: methodIndex,
+            });
+            refreshOpenCodeProviderQueries();
+            return;
+          }
+          setProviderPendingOauthMethodById((existing) => ({ ...existing, [providerId]: methodIndex }));
+          setProviderAuthErrorById((existing) => ({
+            ...existing,
+            [providerId]: authorization.instructions,
+          }));
+        })
+        .catch((error: unknown) => {
+          setProviderAuthErrorById((existing) => ({
+            ...existing,
+            [providerId]: error instanceof Error ? error.message : "Failed to authorize provider.",
+          }));
+        })
+        .finally(() => {
+          setProviderAuthPendingId(null);
+        });
+    },
+    [
+      openCodeConfig,
+      openCodeProviderAuthMethodsQuery.data,
+      providerApiKeyById,
+      refreshOpenCodeProviderQueries,
+    ],
+  );
+
+  const completeOpenCodeProviderOauth = useCallback(
+    async (providerId: string) => {
+      const method = providerPendingOauthMethodById[providerId];
+      if (typeof method !== "number") {
+        return;
+      }
+      setProviderAuthPendingId(providerId);
+      setProviderAuthErrorById((existing) => ({ ...existing, [providerId]: null }));
+      await ensureNativeApi()
+        .opencode.completeProviderAuth({
+          ...openCodeConfig,
+          providerId,
+          method,
+          code: providerOauthCodeById[providerId]?.trim() || undefined,
+        })
+        .then(() => {
+          setProviderPendingOauthMethodById((existing) => {
+            const next = { ...existing };
+            delete next[providerId];
+            return next;
+          });
+          setProviderOauthCodeById((existing) => ({ ...existing, [providerId]: "" }));
+          refreshOpenCodeProviderQueries();
+        })
+        .catch((error: unknown) => {
+          setProviderAuthErrorById((existing) => ({
+            ...existing,
+            [providerId]: error instanceof Error ? error.message : "Failed to complete provider auth.",
+          }));
+        })
+        .finally(() => {
+          setProviderAuthPendingId(null);
+        });
+    },
+    [openCodeConfig, providerOauthCodeById, providerPendingOauthMethodById, refreshOpenCodeProviderQueries],
+  );
+
+  const disconnectOpenCodeProvider = useCallback(
+    async (providerId: string) => {
+      setProviderAuthPendingId(providerId);
+      setProviderAuthErrorById((existing) => ({ ...existing, [providerId]: null }));
+      await ensureNativeApi()
+        .opencode.removeProviderAuth({
+          ...openCodeConfig,
+          providerId,
+        })
+        .then(() => {
+          refreshOpenCodeProviderQueries();
+        })
+        .catch((error: unknown) => {
+          setProviderAuthErrorById((existing) => ({
+            ...existing,
+            [providerId]: error instanceof Error ? error.message : "Failed to disconnect provider.",
+          }));
+        })
+        .finally(() => {
+          setProviderAuthPendingId(null);
+        });
+    },
+    [openCodeConfig, refreshOpenCodeProviderQueries],
+  );
 
   const addCustomModel = useCallback((provider: ProviderKind) => {
     const customModelInput = customModelInputByProvider[provider];
@@ -361,6 +556,103 @@ function SettingsRouteView() {
                     }
                     aria-label="Auto-start local OpenCode"
                   />
+                </div>
+
+                <div className="rounded-lg border border-border bg-background px-3 py-3">
+                  <div className="mb-3">
+                    <p className="text-sm font-medium text-foreground">Providers</p>
+                    <p className="text-xs text-muted-foreground">
+                      Connect or disconnect canonical OpenCode providers without leaving T3 Code.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {(openCodeProvidersQuery.data?.all ?? []).map((provider) => {
+                      const isConnected = openCodeProvidersQuery.data?.connected.includes(provider.id) === true;
+                      const methods = openCodeProviderAuthMethodsQuery.data?.[provider.id] ?? [];
+                      const pendingOauthMethod = providerPendingOauthMethodById[provider.id];
+                      const authError = providerAuthErrorById[provider.id];
+                      return (
+                        <div key={provider.id} className="rounded-lg border border-border/70 px-3 py-2">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{provider.name}</p>
+                              <p className="text-xs text-muted-foreground">{provider.id}</p>
+                            </div>
+                            {isConnected ? (
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="outline"
+                                disabled={providerAuthPendingId === provider.id}
+                                onClick={() => {
+                                  void disconnectOpenCodeProvider(provider.id);
+                                }}
+                              >
+                                Disconnect
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="outline"
+                                disabled={providerAuthPendingId === provider.id || methods.length === 0}
+                                onClick={() => {
+                                  void connectOpenCodeProvider(provider.id);
+                                }}
+                              >
+                                Connect
+                              </Button>
+                            )}
+                          </div>
+                          {!isConnected && methods.some((method) => method.type === "api") ? (
+                            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                              <Input
+                                type="password"
+                                value={providerApiKeyById[provider.id] ?? ""}
+                                onChange={(event) =>
+                                  setProviderApiKeyById((existing) => ({
+                                    ...existing,
+                                    [provider.id]: event.target.value,
+                                  }))
+                                }
+                                placeholder="API key"
+                                spellCheck={false}
+                              />
+                            </div>
+                          ) : null}
+                          {!isConnected && typeof pendingOauthMethod === "number" ? (
+                            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                              <Input
+                                value={providerOauthCodeById[provider.id] ?? ""}
+                                onChange={(event) =>
+                                  setProviderOauthCodeById((existing) => ({
+                                    ...existing,
+                                    [provider.id]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Authorization code"
+                                spellCheck={false}
+                              />
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="outline"
+                                disabled={providerAuthPendingId === provider.id}
+                                onClick={() => {
+                                  void completeOpenCodeProviderOauth(provider.id);
+                                }}
+                              >
+                                Finish OAuth
+                              </Button>
+                            </div>
+                          ) : null}
+                          {authError ? (
+                            <p className="mt-2 text-xs text-muted-foreground">{authError}</p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </section>

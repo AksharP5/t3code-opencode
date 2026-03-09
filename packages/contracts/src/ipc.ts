@@ -34,6 +34,7 @@ import type {
   OpenCodeEvent,
   OpenCodeGetSessionInput,
   OpenCodeListAgentsInput,
+  OpenCodeListProviderAuthMethodsInput,
   OpenCodeListPermissionsInput,
   OpenCodeListQuestionsInput,
   OpenCodeListProvidersInput,
@@ -44,10 +45,15 @@ import type {
   OpenCodeQuestionRequest,
   OpenCodeProviderCatalog,
   OpenCodeProject,
+  OpenCodeProviderAuthMethod,
+  OpenCodeProviderAuthorization,
   OpenCodeReplyPermissionInput,
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
   OpenCodeRevertSessionInput,
+  OpenCodeAuthorizeProviderInput,
+  OpenCodeCompleteProviderAuthInput,
+  OpenCodeRemoveProviderAuthInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeSessionStatusMap,
@@ -55,6 +61,7 @@ import type {
   OpenCodeStatus,
   OpenCodeTodo,
   OpenCodeShareSessionInput,
+  OpenCodeSetProviderApiKeyInput,
   OpenCodeUnrevertSessionInput,
   OpenCodeUnshareSessionInput,
   OpenCodeUpdateSessionInput,
@@ -192,6 +199,7 @@ export interface NativeApi {
     getStatus: (input: OpenCodeListProjectsInput) => Promise<OpenCodeStatus>;
     ensureServer: (input: OpenCodeListProjectsInput) => Promise<OpenCodeStatus>;
     listProviders: (input: OpenCodeListProvidersInput) => Promise<OpenCodeProviderCatalog>;
+    listProviderAuthMethods: (input: OpenCodeListProviderAuthMethodsInput) => Promise<Record<string, OpenCodeProviderAuthMethod[]>>;
     listAgents: (input: OpenCodeListAgentsInput) => Promise<OpenCodeAgent[]>;
     listProjects: (input: OpenCodeListProjectsInput) => Promise<OpenCodeProject[]>;
     listSessions: (input: OpenCodeListSessionsInput) => Promise<OpenCodeSessionSummary[]>;
@@ -206,6 +214,10 @@ export interface NativeApi {
     replyQuestion: (input: OpenCodeReplyQuestionInput) => Promise<boolean>;
     rejectQuestion: (input: OpenCodeRejectQuestionInput) => Promise<boolean>;
     revertSession: (input: OpenCodeRevertSessionInput) => Promise<OpenCodeSession>;
+    setProviderApiKey: (input: OpenCodeSetProviderApiKeyInput) => Promise<boolean>;
+    removeProviderAuth: (input: OpenCodeRemoveProviderAuthInput) => Promise<boolean>;
+    authorizeProvider: (input: OpenCodeAuthorizeProviderInput) => Promise<OpenCodeProviderAuthorization | null>;
+    completeProviderAuth: (input: OpenCodeCompleteProviderAuthInput) => Promise<boolean>;
     shareSession: (input: OpenCodeShareSessionInput) => Promise<OpenCodeSession>;
     unshareSession: (input: OpenCodeUnshareSessionInput) => Promise<OpenCodeSession>;
     unrevertSession: (input: OpenCodeUnrevertSessionInput) => Promise<OpenCodeSession>;

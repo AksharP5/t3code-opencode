@@ -941,6 +941,61 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeListProviderAuthMethods: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listProviderAuthMethods(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode provider auth methods: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeAuthorizeProvider: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.authorizeProvider(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to authorize OpenCode provider: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeCompleteProviderAuth: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.completeProviderAuth(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to complete OpenCode provider auth: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeSetProviderApiKey: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.setProviderApiKey(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to set OpenCode provider API key: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeRemoveProviderAuth: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.removeProviderAuth(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to remove OpenCode provider auth: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeListAgents: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({

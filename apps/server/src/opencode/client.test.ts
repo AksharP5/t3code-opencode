@@ -1,16 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createOpenCodeSession,
+  authorizeOpenCodeProvider,
+  completeOpenCodeProviderAuth,
   fetchOpenCodeHealth,
   getOpenCodeDiff,
   forkOpenCodeSession,
   listOpenCodeQuestions,
   getOpenCodeTodo,
   getOpenCodeVcs,
+  listOpenCodeProviderAuthMethods,
+  removeOpenCodeProviderAuth,
   replyOpenCodePermission,
   replyOpenCodeQuestion,
   revertOpenCodeSession,
   sendOpenCodeMessage,
+  setOpenCodeProviderApiKey,
   shareOpenCodeSession,
   unshareOpenCodeSession,
   unrevertOpenCodeSession,
@@ -311,6 +316,92 @@ describe("opencode client", () => {
 
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/question");
+  });
+
+  it("loads provider auth methods", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        openai: [{ type: "api", label: "API key" }],
+      }),
+    } as Response);
+
+    await expect(listOpenCodeProviderAuthMethods(config)).resolves.toEqual({
+      openai: [{ type: "api", label: "API key" }],
+    });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/provider/auth");
+  });
+
+  it("stores provider api keys", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => true,
+    } as Response);
+
+    await expect(
+      setOpenCodeProviderApiKey({ ...config, providerId: "openai", apiKey: "sk-test" }, config),
+    ).resolves.toBe(true);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/provider/openai/api");
+    expect(call?.[1]?.body).toBe(JSON.stringify({ key: "sk-test" }));
+  });
+
+  it("starts provider oauth flows", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        url: "https://provider.example/auth",
+        method: "auto",
+        instructions: "Sign in",
+      }),
+    } as Response);
+
+    await expect(
+      authorizeOpenCodeProvider({ ...config, providerId: "openai", method: 0 }, config),
+    ).resolves.toEqual({
+      url: "https://provider.example/auth",
+      method: "auto",
+      instructions: "Sign in",
+    });
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/provider/openai/oauth/authorize");
+  });
+
+  it("completes provider oauth flows", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => true,
+    } as Response);
+
+    await expect(
+      completeOpenCodeProviderAuth(
+        { ...config, providerId: "openai", method: 0, code: "oauth-code" },
+        config,
+      ),
+    ).resolves.toBe(true);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/provider/openai/oauth/callback");
+    expect(call?.[1]?.body).toBe(JSON.stringify({ method: 0, code: "oauth-code" }));
+  });
+
+  it("removes provider auth", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => true,
+    } as Response);
+
+    await expect(removeOpenCodeProviderAuth({ ...config, providerId: "openai" }, config)).resolves.toBe(
+      true,
+    );
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/provider/openai/auth");
+    expect(call?.[1]?.method).toBe("DELETE");
   });
 
   it("replies to OpenCode permission prompts", async () => {
