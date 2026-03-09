@@ -5,8 +5,6 @@ import {
   getAppModelOptions,
   getSlashModelOptions,
   normalizeCustomModelSlugs,
-  resolveAppServiceTier,
-  shouldShowFastTierIcon,
   resolveAppModelSelection,
 } from "./appSettings";
 
@@ -86,25 +84,6 @@ describe("getSlashModelOptions", () => {
   });
 });
 
-describe("resolveAppServiceTier", () => {
-  it("maps automatic to no override", () => {
-    expect(resolveAppServiceTier("auto")).toBeNull();
-  });
-
-  it("preserves explicit service tier overrides", () => {
-    expect(resolveAppServiceTier("fast")).toBe("fast");
-    expect(resolveAppServiceTier("flex")).toBe("flex");
-  });
-});
-
-describe("shouldShowFastTierIcon", () => {
-  it("shows the fast-tier icon only for gpt-5.4 on fast tier", () => {
-    expect(shouldShowFastTierIcon("gpt-5.4", "fast")).toBe(true);
-    expect(shouldShowFastTierIcon("gpt-5.4", "auto")).toBe(false);
-    expect(shouldShowFastTierIcon("gpt-5.3-codex", "fast")).toBe(false);
-  });
-});
-
 describe("buildOpenCodeServerConfigInput", () => {
   it("trims values and omits blank passwords", () => {
     expect(
@@ -113,7 +92,6 @@ describe("buildOpenCodeServerConfigInput", () => {
         codexHomePath: "",
         confirmThreadDelete: true,
         enableAssistantStreaming: false,
-        codexServiceTier: "auto",
         customCodexModels: [],
         opencodeServerUrl: " http://127.0.0.1:4096 ",
         opencodeAutoStart: true,
@@ -132,7 +110,6 @@ describe("buildOpenCodeServerConfigInput", () => {
         codexHomePath: "",
         confirmThreadDelete: true,
         enableAssistantStreaming: false,
-        codexServiceTier: "auto",
         customCodexModels: [],
         opencodeServerUrl: "http://127.0.0.1:4096",
         opencodeAutoStart: false,
