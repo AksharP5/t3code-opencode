@@ -32,6 +32,9 @@ const AppSettingsSchema = Schema.Struct({
   opencodePassword: Schema.String.check(Schema.isMaxLength(4096)).pipe(
     Schema.withConstructorDefault(() => Option.some("")),
   ),
+  opencodeWorkspaceId: Schema.String.check(Schema.isMaxLength(255)).pipe(
+    Schema.withConstructorDefault(() => Option.some("")),
+  ),
 });
 export type AppSettings = typeof AppSettingsSchema.Type;
 export interface AppModelOption {
@@ -176,6 +179,9 @@ export function buildOpenCodeServerConfigInput(settings: AppSettings): OpenCodeS
     autoStart: settings.opencodeAutoStart,
     ...(settings.opencodePassword.trim().length > 0
       ? { password: settings.opencodePassword.trim() }
+      : {}),
+    ...(settings.opencodeWorkspaceId.trim().length > 0
+      ? { workspaceId: settings.opencodeWorkspaceId.trim() }
       : {}),
   };
 }

@@ -471,6 +471,9 @@ function buildHeaders(config: ResolvedOpenCodeConfig, directory?: string): Heade
   if (directory) {
     headers.set("x-opencode-directory", encodeDirectoryHeader(directory));
   }
+  if (config.workspaceId) {
+    headers.set("x-opencode-workspace", config.workspaceId);
+  }
   headers.set("Accept", "application/json");
   headers.set("Content-Type", "application/json");
   return headers;

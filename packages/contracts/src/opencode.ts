@@ -10,6 +10,7 @@ export const OpenCodeServerConfigInput = Schema.Struct({
   baseUrl: OpenCodeUrl,
   autoStart: Schema.Boolean,
   password: Schema.optional(OpenCodeSecret),
+  workspaceId: Schema.optional(OpenCodeIdentifier),
 });
 export type OpenCodeServerConfigInput = typeof OpenCodeServerConfigInput.Type;
 

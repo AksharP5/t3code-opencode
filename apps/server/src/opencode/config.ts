@@ -7,6 +7,7 @@ export interface ResolvedOpenCodeConfig {
   readonly baseUrl: string;
   readonly autoStart: boolean;
   readonly password: string | null;
+  readonly workspaceId?: string | null;
 }
 
 export function resolveOpenCodeConfig(input: OpenCodeServerConfigInput): ResolvedOpenCodeConfig {
@@ -15,6 +16,7 @@ export function resolveOpenCodeConfig(input: OpenCodeServerConfigInput): Resolve
     baseUrl: normalizedBaseUrl,
     autoStart: input.autoStart,
     password: normalizeSecret(input.password),
+    workspaceId: normalizeSecret(input.workspaceId),
   };
 }
 

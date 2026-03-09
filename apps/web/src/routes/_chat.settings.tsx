@@ -333,6 +333,20 @@ function SettingsRouteView() {
                   />
                 </label>
 
+                <label htmlFor="opencode-workspace" className="block space-y-1">
+                  <span className="text-xs font-medium text-foreground">OpenCode workspace ID</span>
+                  <Input
+                    id="opencode-workspace"
+                    value={settings.opencodeWorkspaceId}
+                    onChange={(event) => updateSettings({ opencodeWorkspaceId: event.target.value })}
+                    placeholder="Optional"
+                    spellCheck={false}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Use this when you want T3 Code to operate on a specific canonical OpenCode workspace.
+                  </span>
+                </label>
+
                 <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
                   <div>
                     <p className="text-sm font-medium text-foreground">Auto-start local OpenCode</p>

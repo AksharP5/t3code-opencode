@@ -96,6 +96,7 @@ describe("buildOpenCodeServerConfigInput", () => {
         opencodeServerUrl: " http://127.0.0.1:4096 ",
         opencodeAutoStart: true,
         opencodePassword: "   ",
+        opencodeWorkspaceId: " ",
       }),
     ).toEqual({
       baseUrl: "http://127.0.0.1:4096",
@@ -114,11 +115,13 @@ describe("buildOpenCodeServerConfigInput", () => {
         opencodeServerUrl: "http://127.0.0.1:4096",
         opencodeAutoStart: false,
         opencodePassword: " secret ",
+        opencodeWorkspaceId: " workspace-1 ",
       }),
     ).toEqual({
       baseUrl: "http://127.0.0.1:4096",
       autoStart: false,
       password: "secret",
+      workspaceId: "workspace-1",
     });
   });
 });
