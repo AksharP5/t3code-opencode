@@ -2,6 +2,7 @@ import {
   ApprovalRequestId,
   EventId,
   type OpenCodeEvent,
+  type UserInputQuestion,
   ThreadId,
   type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
@@ -133,6 +134,39 @@ function projectActivity(event: OpenCodeEvent): {
     });
   }
 
+  if (event.payload.type === "question.asked") {
+    const requestId = asString(properties?.id);
+    const rawQuestions = Array.isArray(properties?.questions) ? properties.questions : null;
+    const questions = rawQuestions ? toUserInputQuestions(requestId, rawQuestions) : null;
+    if (!requestId || !questions || questions.length === 0) {
+      return null;
+    }
+    return buildActivity(sessionId, {
+      tone: "info",
+      kind: "user-input.requested",
+      summary: "Question requires response",
+      payload: {
+        requestId: ApprovalRequestId.makeUnsafe(requestId),
+        questions,
+      },
+    });
+  }
+
+  if (event.payload.type === "question.replied" || event.payload.type === "question.rejected") {
+    const requestId = asString(properties?.requestID);
+    if (!requestId) {
+      return null;
+    }
+    return buildActivity(sessionId, {
+      tone: "info",
+      kind: "user-input.resolved",
+      summary: "Question resolved",
+      payload: {
+        requestId: ApprovalRequestId.makeUnsafe(requestId),
+      },
+    });
+  }
+
   if (event.payload.type === "session.error") {
     const error = asRecord(properties?.error);
     const detail =
@@ -200,6 +234,43 @@ function firstString(value: unknown): string | null {
     }
   }
   return null;
+}
+
+function toUserInputQuestions(
+  requestId: string | null,
+  questions: unknown[],
+): UserInputQuestion[] | null {
+  if (!requestId) {
+    return null;
+  }
+  const mapped = questions.flatMap((question, index) => {
+    const record = asRecord(question);
+    const header = asString(record?.header);
+    const prompt = asString(record?.question);
+    const options = Array.isArray(record?.options)
+      ? record.options.flatMap((option) => {
+          const optionRecord = asRecord(option);
+          const label = asString(optionRecord?.label);
+          const description = asString(optionRecord?.description);
+          if (!label || !description) {
+            return [];
+          }
+          return [{ label, description }];
+        })
+      : [];
+    if (!header || !prompt || options.length === 0) {
+      return [];
+    }
+    return [
+      {
+        id: `${requestId}:${index}`,
+        header,
+        question: prompt,
+        options,
+      },
+    ];
+  });
+  return mapped.length > 0 ? mapped : null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

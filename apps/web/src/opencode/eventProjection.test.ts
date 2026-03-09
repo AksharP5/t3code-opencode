@@ -148,6 +148,49 @@ describe("applyOpenCodeEventToQueryCache", () => {
     ]);
   });
 
+  it("tracks question asks and replies without a refetch", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = opencodeQueryKeys.questions(config);
+    queryClient.setQueryData(queryKey, []);
+
+    await applyOpenCodeEventToQueryCache(
+      queryClient,
+      makeEvent({
+        payload: {
+          type: "question.asked",
+          properties: {
+            id: "question-1",
+            sessionID: "session-1",
+            questions: [
+              {
+                question: "Continue?",
+                header: "Continue",
+                options: [{ label: "Yes", description: "Continue the task" }],
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(queryClient.getQueryData(queryKey)).toHaveLength(1);
+
+    await applyOpenCodeEventToQueryCache(
+      queryClient,
+      makeEvent({
+        payload: {
+          type: "question.replied",
+          properties: {
+            sessionID: "session-1",
+            requestID: "question-1",
+          },
+        },
+      }),
+    );
+
+    expect(queryClient.getQueryData(queryKey)).toEqual([]);
+  });
+
   it("updates cached diffs from session diff events", async () => {
     const queryClient = new QueryClient();
     const queryKey = opencodeQueryKeys.diff({ ...config, sessionId: "session-1" });

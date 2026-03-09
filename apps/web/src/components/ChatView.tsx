@@ -12,6 +12,7 @@ import {
   type OpenCodeProviderCatalog,
   type OpenCodeAgent,
   type OpenCodeFileDiff,
+  type OpenCodeQuestionRequest,
   type OpenCodeTodo,
   type ProjectId,
   type ProjectEntry,
@@ -270,6 +271,42 @@ function openCodePermissionToPendingApproval(
     createdAt: new Date().toISOString(),
     detail: buildOpenCodePermissionDetail(request),
   };
+}
+
+function openCodeQuestionToPendingUserInput(
+  request: OpenCodeQuestionRequest,
+): PendingUserInput {
+  return {
+    requestId: ApprovalRequestId.makeUnsafe(request.id),
+    createdAt: new Date().toISOString(),
+    questions: request.questions.flatMap((question, index) => {
+      if (question.options.length === 0) {
+        return [];
+      }
+      return [
+        {
+          id: `${request.id}:${index}`,
+          header: question.header,
+          question: question.question,
+          options: question.options,
+        },
+      ];
+    }),
+  };
+}
+
+function buildOpenCodeQuestionAnswers(
+  request: OpenCodeQuestionRequest,
+  answers: Record<string, unknown>,
+): string[][] {
+  return request.questions.map((question, index) => {
+    const key = `${request.id}:${index}`;
+    const value = answers[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return [value];
+    }
+    return [];
+  });
 }
 
 function openCodePermissionToRequestKind(
@@ -883,6 +920,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
       ).map(openCodePermissionToPendingApproval),
     [activeThread?.id, activeThread?.source, openCodeState.pendingPermissions],
   );
+  const openCodePendingUserInputs = useMemo(
+    () =>
+      (activeThread?.source === "opencode"
+        ? openCodeState.pendingQuestions.filter((request) => request.sessionID === activeThread.id)
+        : []
+      )
+        .map(openCodeQuestionToPendingUserInput)
+        .filter((request) => request.questions.length > 0),
+    [activeThread?.id, activeThread?.source, openCodeState.pendingQuestions],
+  );
   const isOpenCodeThread = activeThread?.source === "opencode";
   const threadCapabilities = activeThread?.capabilities ?? NATIVE_THREAD_CAPABILITIES;
   const runtimeMode =
@@ -1080,10 +1127,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [threadActivities],
   );
   const visiblePendingApprovals = isOpenCodeThread ? openCodePendingApprovals : pendingApprovals;
-  const pendingUserInputs = useMemo(
+  const derivedPendingUserInputs = useMemo(
     () => derivePendingUserInputs(threadActivities),
     [threadActivities],
   );
+  const pendingUserInputs = isOpenCodeThread ? openCodePendingUserInputs : derivedPendingUserInputs;
   const activePendingUserInput = pendingUserInputs[0] ?? null;
   const activePendingDraftAnswers = useMemo(
     () =>
@@ -3199,6 +3247,28 @@ export default function ChatView({ threadId }: ChatViewProps) {
       setRespondingUserInputRequestIds((existing) =>
         existing.includes(requestId) ? existing : [...existing, requestId],
       );
+      if (activeThread?.source === "opencode") {
+        const request = openCodeState.pendingQuestions.find((question) => question.id === requestId);
+        if (!request) {
+          setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
+          return;
+        }
+        await api.opencode
+          .replyQuestion({
+            ...openCodeConfig,
+            requestId,
+            answers: buildOpenCodeQuestionAnswers(request, answers),
+          })
+          .catch((err: unknown) => {
+            setStoreThreadError(
+              activeThreadId,
+              err instanceof Error ? err.message : "Failed to submit user input.",
+            );
+          });
+        setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
+        return;
+      }
+
       await api.orchestration
         .dispatchCommand({
           type: "thread.user-input.respond",
@@ -3216,7 +3286,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         });
       setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
     },
-    [activeThreadId, setStoreThreadError],
+    [activeThread?.source, activeThreadId, openCodeConfig, openCodeState.pendingQuestions, setStoreThreadError],
   );
 
   const setActivePendingUserInputQuestionIndex = useCallback(

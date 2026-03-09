@@ -5,6 +5,7 @@ import type {
   OpenCodeMessageInfo,
   OpenCodeMessagePart,
   OpenCodePermissionRequest,
+  OpenCodeQuestionRequest,
   OpenCodeRuntimeStatus,
   OpenCodeSession,
   OpenCodeSessionSummary,
@@ -136,6 +137,25 @@ export function applyOpenCodeEventToQueryCache(
     }
   }
 
+  if (type === "question.asked") {
+    const request = asQuestionRequest(event.payload.properties);
+    if (request) {
+      updateQuestionQueries(queryClient, (requests) => upsertQuestionRequest(requests, request));
+      return Promise.resolve();
+    }
+  }
+
+  if (type === "question.replied" || type === "question.rejected") {
+    const properties = asRecord(event.payload.properties);
+    const requestId = asString(properties?.requestID);
+    if (requestId) {
+      updateQuestionQueries(queryClient, (requests) =>
+        requests.filter((request) => request.id !== requestId),
+      );
+      return Promise.resolve();
+    }
+  }
+
   if (type === "todo.updated") {
     const properties = asRecord(event.payload.properties);
     const sessionId = asString(properties?.sessionID);
@@ -180,6 +200,10 @@ function invalidateOpenCodeQueriesForEvent(
   if (type.startsWith("permission.")) {
     tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "permissions"] }));
     tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "session"] }));
+  }
+
+  if (type.startsWith("question.")) {
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "questions"] }));
   }
 
   if (type.startsWith("todo.")) {
@@ -322,6 +346,17 @@ function updatePermissionsQueries(
 ) {
   for (const [queryKey, data] of queryClient.getQueriesData<OpenCodePermissionRequest[]>({
     queryKey: ["opencode", "permissions"],
+  })) {
+    queryClient.setQueryData(queryKey, update(data ?? []));
+  }
+}
+
+function updateQuestionQueries(
+  queryClient: QueryClient,
+  update: (requests: OpenCodeQuestionRequest[]) => OpenCodeQuestionRequest[],
+) {
+  for (const [queryKey, data] of queryClient.getQueriesData<OpenCodeQuestionRequest[]>({
+    queryKey: ["opencode", "questions"],
   })) {
     queryClient.setQueryData(queryKey, update(data ?? []));
   }
@@ -474,6 +509,19 @@ function upsertPermissionRequest(
   return next;
 }
 
+function upsertQuestionRequest(
+  requests: OpenCodeQuestionRequest[],
+  request: OpenCodeQuestionRequest,
+): OpenCodeQuestionRequest[] {
+  const existingIndex = requests.findIndex((entry) => entry.id === request.id);
+  if (existingIndex === -1) {
+    return [...requests, request];
+  }
+  const next = [...requests];
+  next[existingIndex] = request;
+  return next;
+}
+
 function sortMessages(left: OpenCodeMessage, right: OpenCodeMessage): number {
   return left.info.time.created - right.info.time.created;
 }
@@ -523,6 +571,17 @@ function asPermissionRequest(value: unknown): OpenCodePermissionRequest | null {
     return null;
   }
   return record as OpenCodePermissionRequest;
+}
+
+function asQuestionRequest(value: unknown): OpenCodeQuestionRequest | null {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+  if (!asString(record.id) || !asString(record.sessionID) || !Array.isArray(record.questions)) {
+    return null;
+  }
+  return record as OpenCodeQuestionRequest;
 }
 
 function asStatus(value: unknown): OpenCodeRuntimeStatus | null {

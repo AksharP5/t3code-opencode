@@ -16,6 +16,7 @@ import {
   opencodeAgentsQueryOptions,
   opencodeDiffQueryOptions,
   opencodePermissionsQueryOptions,
+  opencodeQuestionsQueryOptions,
   opencodeMessagesQueryOptions,
   opencodeProvidersQueryOptions,
   opencodeProjectsQueryOptions,
@@ -75,6 +76,10 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
   });
   const permissionsQuery = useQuery({
     ...opencodePermissionsQueryOptions(config),
+    enabled: statusQuery.data?.healthy === true,
+  });
+  const questionsQuery = useQuery({
+    ...opencodeQuestionsQueryOptions(config),
     enabled: statusQuery.data?.healthy === true,
   });
   const todoQuery = useQuery({
@@ -211,6 +216,7 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     agentCatalog,
     providerCatalog: providersQuery.data ?? null,
     pendingPermissions: permissionsQuery.data ?? [],
+    pendingQuestions: questionsQuery.data ?? [],
     activeTodos: todoQuery.data ?? [],
     activeDiff: diffQuery.data ?? [],
     projects,

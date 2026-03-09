@@ -4,9 +4,11 @@ import {
   fetchOpenCodeHealth,
   getOpenCodeDiff,
   forkOpenCodeSession,
+  listOpenCodeQuestions,
   getOpenCodeTodo,
   getOpenCodeVcs,
   replyOpenCodePermission,
+  replyOpenCodeQuestion,
   sendOpenCodeMessage,
   updateOpenCodeSession,
 } from "./client";
@@ -271,6 +273,42 @@ describe("opencode client", () => {
     expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/diff");
   });
 
+  it("loads pending question requests", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "question-1",
+          sessionID: "session-1",
+          questions: [
+            {
+              question: "Continue?",
+              header: "Continue",
+              options: [{ label: "Yes", description: "Continue the task" }],
+            },
+          ],
+        },
+      ],
+    } as Response);
+
+    await expect(listOpenCodeQuestions(config)).resolves.toEqual([
+      {
+        id: "question-1",
+        sessionID: "session-1",
+        questions: [
+          {
+            question: "Continue?",
+            header: "Continue",
+            options: [{ label: "Yes", description: "Continue the task" }],
+          },
+        ],
+      },
+    ]);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/question");
+  });
+
   it("replies to OpenCode permission prompts", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
@@ -291,6 +329,28 @@ describe("opencode client", () => {
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/permission/permission-1/reply");
     expect(call?.[1]?.body).toBe(JSON.stringify({ reply: "once" }));
+  });
+
+  it("replies to OpenCode question prompts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => true,
+    } as Response);
+
+    await expect(
+      replyOpenCodeQuestion(
+        {
+          ...config,
+          requestId: "question-1",
+          answers: [["Yes"]],
+        },
+        config,
+      ),
+    ).resolves.toBe(true);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/question/question-1/reply");
+    expect(call?.[1]?.body).toBe(JSON.stringify({ answers: [["Yes"]] }));
   });
 
   it("loads VCS info for the requested directory", async () => {

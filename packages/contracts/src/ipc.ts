@@ -35,14 +35,18 @@ import type {
   OpenCodeGetSessionInput,
   OpenCodeListAgentsInput,
   OpenCodeListPermissionsInput,
+  OpenCodeListQuestionsInput,
   OpenCodeListProvidersInput,
   OpenCodeListProjectsInput,
   OpenCodeListSessionsInput,
   OpenCodeMessage,
   OpenCodePermissionRequest,
+  OpenCodeQuestionRequest,
   OpenCodeProviderCatalog,
   OpenCodeProject,
   OpenCodeReplyPermissionInput,
+  OpenCodeReplyQuestionInput,
+  OpenCodeRejectQuestionInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeSessionStatusMap,
@@ -193,7 +197,10 @@ export interface NativeApi {
     getTodo: (input: OpenCodeGetTodoInput) => Promise<OpenCodeTodo[]>;
     getStatuses: (input: OpenCodeListProjectsInput) => Promise<OpenCodeSessionStatusMap>;
     listPermissions: (input: OpenCodeListPermissionsInput) => Promise<OpenCodePermissionRequest[]>;
+    listQuestions: (input: OpenCodeListQuestionsInput) => Promise<OpenCodeQuestionRequest[]>;
     replyPermission: (input: OpenCodeReplyPermissionInput) => Promise<boolean>;
+    replyQuestion: (input: OpenCodeReplyQuestionInput) => Promise<boolean>;
+    rejectQuestion: (input: OpenCodeRejectQuestionInput) => Promise<boolean>;
     getVcs: (input: OpenCodeGetVcsInput) => Promise<OpenCodeVcsInfo>;
     createSession: (input: OpenCodeCreateSessionInput) => Promise<OpenCodeSession>;
     sendMessage: (input: OpenCodeSendMessageInput) => Promise<OpenCodeMessage | null>;

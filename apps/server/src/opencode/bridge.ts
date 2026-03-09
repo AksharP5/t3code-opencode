@@ -13,8 +13,11 @@ import type {
   OpenCodeGetTodoInput,
   OpenCodeListProjectsInput,
   OpenCodeListPermissionsInput,
+  OpenCodeListQuestionsInput,
   OpenCodeListSessionsInput,
   OpenCodeReplyPermissionInput,
+  OpenCodeReplyQuestionInput,
+  OpenCodeRejectQuestionInput,
   OpenCodeSendMessageInput,
   OpenCodeStatus,
   OpenCodeUpdateSessionInput,
@@ -34,9 +37,12 @@ import {
   listOpenCodeAgents,
   listOpenCodeProviders,
   listOpenCodePermissions,
+  listOpenCodeQuestions,
   listOpenCodeProjects,
   listOpenCodeSessions,
   replyOpenCodePermission,
+  replyOpenCodeQuestion,
+  rejectOpenCodeQuestion,
   sendOpenCodeMessage,
   streamOpenCodeEvents,
   updateOpenCodeSession,
@@ -164,9 +170,24 @@ export class OpenCodeBridge {
     return listOpenCodePermissions(config);
   }
 
+  async listQuestions(input: OpenCodeListQuestionsInput) {
+    const config = await this.ensureReady(input);
+    return listOpenCodeQuestions(config);
+  }
+
   async replyPermission(input: OpenCodeReplyPermissionInput) {
     const config = await this.ensureReady(input);
     return replyOpenCodePermission(input, config);
+  }
+
+  async replyQuestion(input: OpenCodeReplyQuestionInput) {
+    const config = await this.ensureReady(input);
+    return replyOpenCodeQuestion(input, config);
+  }
+
+  async rejectQuestion(input: OpenCodeRejectQuestionInput) {
+    const config = await this.ensureReady(input);
+    return rejectOpenCodeQuestion(input, config);
   }
 
   async getVcs(input: OpenCodeGetVcsInput) {

@@ -10,8 +10,11 @@ import type {
   OpenCodeGetVcsInput,
   OpenCodeMessage,
   OpenCodePermissionRequest,
+  OpenCodeQuestionRequest,
   OpenCodeProviderCatalog,
   OpenCodeReplyPermissionInput,
+  OpenCodeReplyQuestionInput,
+  OpenCodeRejectQuestionInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
   OpenCodeSessionStatusMap,
@@ -27,6 +30,7 @@ import {
   OpenCodeEvent as OpenCodeEventSchema,
   OpenCodeMessage as OpenCodeMessageSchema,
   OpenCodePermissionRequest as OpenCodePermissionRequestSchema,
+  OpenCodeQuestionRequest as OpenCodeQuestionRequestSchema,
   OpenCodeProviderCatalog as OpenCodeProviderCatalogSchema,
   OpenCodeProject as OpenCodeProjectSchema,
   OpenCodeSession as OpenCodeSessionSchema,
@@ -49,6 +53,7 @@ const decodeDiff = Schema.decodeUnknownSync(Schema.Array(OpenCodeFileDiffSchema)
 const decodeTodo = Schema.decodeUnknownSync(Schema.Array(OpenCodeTodoSchema));
 const decodeStatuses = Schema.decodeUnknownSync(OpenCodeSessionStatusMapSchema);
 const decodePermissions = Schema.decodeUnknownSync(Schema.Array(OpenCodePermissionRequestSchema));
+const decodeQuestions = Schema.decodeUnknownSync(Schema.Array(OpenCodeQuestionRequestSchema));
 const decodeEvent = Schema.decodeUnknownSync(OpenCodeEventSchema);
 const decodeVcsInfo = Schema.decodeUnknownSync(OpenCodeVcsInfoSchema);
 
@@ -212,6 +217,18 @@ export async function listOpenCodePermissions(
   return Array.from(decodePermissions(await response.json()));
 }
 
+export async function listOpenCodeQuestions(
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeQuestionRequest[]> {
+  const response = await fetch(`${config.baseUrl}/question`, {
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode question list failed with ${response.status}.`);
+  }
+  return Array.from(decodeQuestions(await response.json()));
+}
+
 export async function replyOpenCodePermission(
   input: OpenCodeReplyPermissionInput,
   config: ResolvedOpenCodeConfig,
@@ -229,6 +246,41 @@ export async function replyOpenCodePermission(
   );
   if (!response.ok) {
     throw new Error(`OpenCode permission reply failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
+}
+
+export async function replyOpenCodeQuestion(
+  input: OpenCodeReplyQuestionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(
+    `${config.baseUrl}/question/${encodeURIComponent(input.requestId)}/reply`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify({ answers: input.answers }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode question reply failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
+}
+
+export async function rejectOpenCodeQuestion(
+  input: OpenCodeRejectQuestionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(
+    `${config.baseUrl}/question/${encodeURIComponent(input.requestId)}/reject`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode question rejection failed with ${response.status}.`);
   }
   return (await response.json()) === true;
 }

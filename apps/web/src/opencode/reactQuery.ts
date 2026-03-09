@@ -6,6 +6,7 @@ import type {
   OpenCodeGetTodoInput,
   OpenCodeListAgentsInput,
   OpenCodeListPermissionsInput,
+  OpenCodeListQuestionsInput,
   OpenCodeListProvidersInput,
   OpenCodeListProjectsInput,
   OpenCodeListSessionsInput,
@@ -25,6 +26,7 @@ export const opencodeQueryKeys = {
   todo: (input: OpenCodeGetTodoInput) => ["opencode", "todo", input] as const,
   statuses: (input: OpenCodeListProjectsInput) => ["opencode", "statuses", input] as const,
   permissions: (input: OpenCodeListPermissionsInput) => ["opencode", "permissions", input] as const,
+  questions: (input: OpenCodeListQuestionsInput) => ["opencode", "questions", input] as const,
   vcs: (input: OpenCodeGetVcsInput) => ["opencode", "vcs", input] as const,
 };
 
@@ -126,6 +128,16 @@ export function opencodePermissionsQueryOptions(input: OpenCodeListPermissionsIn
   return queryOptions({
     queryKey: opencodeQueryKeys.permissions(input),
     queryFn: async () => ensureNativeApi().opencode.listPermissions(input),
+    staleTime: 0,
+    refetchOnReconnect: true,
+    refetchInterval: 2_000,
+  });
+}
+
+export function opencodeQuestionsQueryOptions(input: OpenCodeListQuestionsInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.questions(input),
+    queryFn: async () => ensureNativeApi().opencode.listQuestions(input),
     staleTime: 0,
     refetchOnReconnect: true,
     refetchInterval: 2_000,

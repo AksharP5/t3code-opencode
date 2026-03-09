@@ -1040,6 +1040,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeListQuestions: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listQuestions(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode questions: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeReplyPermission: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({
@@ -1047,6 +1058,28 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           catch: (cause) =>
             new RouteRequestError({
               message: `Failed to reply to OpenCode permission: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeReplyQuestion: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.replyQuestion(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to reply to OpenCode question: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeRejectQuestion: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.rejectQuestion(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to reject OpenCode question: ${String(cause)}`,
             }),
         });
       }

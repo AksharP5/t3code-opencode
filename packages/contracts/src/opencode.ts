@@ -186,6 +186,34 @@ export const OpenCodeTodo = Schema.Struct({
 });
 export type OpenCodeTodo = typeof OpenCodeTodo.Type;
 
+export const OpenCodeQuestionOption = Schema.Struct({
+  label: Schema.String,
+  description: Schema.String,
+});
+export type OpenCodeQuestionOption = typeof OpenCodeQuestionOption.Type;
+
+export const OpenCodeQuestionInfo = Schema.Struct({
+  question: Schema.String,
+  header: Schema.String,
+  options: Schema.Array(OpenCodeQuestionOption),
+  multiple: Schema.optional(Schema.Boolean),
+  custom: Schema.optional(Schema.Boolean),
+});
+export type OpenCodeQuestionInfo = typeof OpenCodeQuestionInfo.Type;
+
+export const OpenCodeQuestionRequest = Schema.Struct({
+  id: OpenCodeIdentifier,
+  sessionID: OpenCodeIdentifier,
+  questions: Schema.Array(OpenCodeQuestionInfo),
+  tool: Schema.optional(
+    Schema.Struct({
+      messageID: Schema.String,
+      callID: Schema.String,
+    }),
+  ),
+});
+export type OpenCodeQuestionRequest = typeof OpenCodeQuestionRequest.Type;
+
 export const OpenCodeFileDiff = Schema.Struct({
   file: Schema.String,
   before: Schema.String,
@@ -407,6 +435,9 @@ export type OpenCodeGetDiffInput = typeof OpenCodeGetDiffInput.Type;
 export const OpenCodeListPermissionsInput = OpenCodeServerConfigInput;
 export type OpenCodeListPermissionsInput = typeof OpenCodeListPermissionsInput.Type;
 
+export const OpenCodeListQuestionsInput = OpenCodeServerConfigInput;
+export type OpenCodeListQuestionsInput = typeof OpenCodeListQuestionsInput.Type;
+
 export const OpenCodeGetVcsInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,
   directory: TrimmedNonEmptyString,
@@ -453,6 +484,19 @@ export const OpenCodeReplyPermissionInput = Schema.Struct({
   message: Schema.optional(Schema.String),
 });
 export type OpenCodeReplyPermissionInput = typeof OpenCodeReplyPermissionInput.Type;
+
+export const OpenCodeReplyQuestionInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  requestId: OpenCodeIdentifier,
+  answers: Schema.Array(Schema.Array(Schema.String)),
+});
+export type OpenCodeReplyQuestionInput = typeof OpenCodeReplyQuestionInput.Type;
+
+export const OpenCodeRejectQuestionInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  requestId: OpenCodeIdentifier,
+});
+export type OpenCodeRejectQuestionInput = typeof OpenCodeRejectQuestionInput.Type;
 
 export const OpenCodeDeleteSessionInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,

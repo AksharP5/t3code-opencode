@@ -304,10 +304,17 @@ export default function Sidebar() {
   const pendingUserInputByThreadId = useMemo(() => {
     const map = new Map<ThreadId, boolean>();
     for (const thread of visibleThreads) {
+      if (thread.source === "opencode") {
+        map.set(
+          thread.id,
+          openCodeState.pendingQuestions.some((request) => request.sessionID === thread.id),
+        );
+        continue;
+      }
       map.set(thread.id, derivePendingUserInputs(thread.activities).length > 0);
     }
     return map;
-  }, [visibleThreads]);
+  }, [openCodeState.pendingQuestions, visibleThreads]);
   const projectCwdById = useMemo(
     () => new Map(sortedVisibleProjects.map((project) => [project.id, project.cwd] as const)),
     [sortedVisibleProjects],
