@@ -27,6 +27,7 @@ import type {
   OpenCodeDeleteSessionInput,
   OpenCodeForkSessionInput,
   OpenCodeAgent,
+  OpenCodeGetTodoInput,
   OpenCodeGetVcsInput,
   OpenCodeEvent,
   OpenCodeGetSessionInput,
@@ -45,6 +46,7 @@ import type {
   OpenCodeSessionStatusMap,
   OpenCodeSessionSummary,
   OpenCodeStatus,
+  OpenCodeTodo,
   OpenCodeUpdateSessionInput,
   OpenCodeVcsInfo,
 } from "./opencode";
@@ -185,6 +187,7 @@ export interface NativeApi {
     listSessions: (input: OpenCodeListSessionsInput) => Promise<OpenCodeSessionSummary[]>;
     getSession: (input: OpenCodeGetSessionInput) => Promise<OpenCodeSession>;
     getMessages: (input: OpenCodeGetSessionInput) => Promise<OpenCodeMessage[]>;
+    getTodo: (input: OpenCodeGetTodoInput) => Promise<OpenCodeTodo[]>;
     getStatuses: (input: OpenCodeListProjectsInput) => Promise<OpenCodeSessionStatusMap>;
     listPermissions: (input: OpenCodeListPermissionsInput) => Promise<OpenCodePermissionRequest[]>;
     replyPermission: (input: OpenCodeReplyPermissionInput) => Promise<boolean>;

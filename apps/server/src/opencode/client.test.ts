@@ -3,6 +3,7 @@ import {
   createOpenCodeSession,
   fetchOpenCodeHealth,
   forkOpenCodeSession,
+  getOpenCodeTodo,
   getOpenCodeVcs,
   replyOpenCodePermission,
   sendOpenCodeMessage,
@@ -205,6 +206,30 @@ describe("opencode client", () => {
         permission: [{ permission: "*", pattern: "*", action: "allow" }],
       }),
     );
+  });
+
+  it("loads session todos", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { content: "Ship integration", status: "in_progress", priority: "high" },
+      ],
+    } as Response);
+
+    await expect(
+      getOpenCodeTodo(
+        {
+          ...config,
+          sessionId: "session-1",
+        },
+        config,
+      ),
+    ).resolves.toEqual([
+      { content: "Ship integration", status: "in_progress", priority: "high" },
+    ]);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/todo");
   });
 
   it("replies to OpenCode permission prompts", async () => {

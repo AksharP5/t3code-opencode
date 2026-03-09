@@ -9,6 +9,7 @@ import type {
   OpenCodeEvent,
   OpenCodeGetVcsInput,
   OpenCodeGetSessionInput,
+  OpenCodeGetTodoInput,
   OpenCodeListProjectsInput,
   OpenCodeListPermissionsInput,
   OpenCodeListSessionsInput,
@@ -25,6 +26,7 @@ import {
   forkOpenCodeSession,
   getOpenCodeMessages,
   getOpenCodeSession,
+  getOpenCodeTodo,
   getOpenCodeStatuses,
   getOpenCodeVcs,
   listOpenCodeAgents,
@@ -138,6 +140,11 @@ export class OpenCodeBridge {
   async getMessages(input: OpenCodeGetSessionInput) {
     const config = await this.ensureReady(input);
     return getOpenCodeMessages(config, input.sessionId);
+  }
+
+  async getTodo(input: OpenCodeGetTodoInput) {
+    const config = await this.ensureReady(input);
+    return getOpenCodeTodo(input, config);
   }
 
   async getStatuses(input: OpenCodeListProjectsInput) {

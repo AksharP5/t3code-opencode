@@ -179,6 +179,13 @@ export const OpenCodeVcsInfo = Schema.Struct({
 });
 export type OpenCodeVcsInfo = typeof OpenCodeVcsInfo.Type;
 
+export const OpenCodeTodo = Schema.Struct({
+  content: Schema.String,
+  status: Schema.String,
+  priority: Schema.String,
+});
+export type OpenCodeTodo = typeof OpenCodeTodo.Type;
+
 export const OpenCodeSessionSummary = Schema.Struct({
   id: OpenCodeIdentifier,
   slug: Schema.optional(Schema.String),
@@ -380,6 +387,9 @@ export const OpenCodeGetSessionInput = Schema.Struct({
   sessionId: OpenCodeIdentifier,
 });
 export type OpenCodeGetSessionInput = typeof OpenCodeGetSessionInput.Type;
+
+export const OpenCodeGetTodoInput = OpenCodeGetSessionInput;
+export type OpenCodeGetTodoInput = typeof OpenCodeGetTodoInput.Type;
 
 export const OpenCodeListPermissionsInput = OpenCodeServerConfigInput;
 export type OpenCodeListPermissionsInput = typeof OpenCodeListPermissionsInput.Type;

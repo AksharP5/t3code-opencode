@@ -125,6 +125,29 @@ describe("applyOpenCodeEventToQueryCache", () => {
     expect(queryClient.getQueryData<OpenCodePermissionRequest[]>(queryKey)).toEqual([]);
   });
 
+  it("updates cached todos from todo events", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = opencodeQueryKeys.todo({ ...config, sessionId: "session-1" });
+    queryClient.setQueryData(queryKey, []);
+
+    await applyOpenCodeEventToQueryCache(
+      queryClient,
+      makeEvent({
+        payload: {
+          type: "todo.updated",
+          properties: {
+            sessionID: "session-1",
+            todos: [{ content: "Ship integration", status: "in_progress", priority: "high" }],
+          },
+        },
+      }),
+    );
+
+    expect(queryClient.getQueryData(queryKey)).toEqual([
+      { content: "Ship integration", status: "in_progress", priority: "high" },
+    ]);
+  });
+
   it("updates status, session details, and vcs branch for the active directory", async () => {
     const queryClient = new QueryClient();
     const statusesKey = opencodeQueryKeys.statuses(config);

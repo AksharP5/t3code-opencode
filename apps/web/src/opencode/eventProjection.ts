@@ -7,6 +7,7 @@ import type {
   OpenCodeRuntimeStatus,
   OpenCodeSession,
   OpenCodeSessionSummary,
+  OpenCodeTodo,
 } from "@t3tools/contracts";
 import type { QueryClient } from "@tanstack/react-query";
 import { opencodeQueryKeys } from "./reactQuery";
@@ -124,6 +125,16 @@ export function applyOpenCodeEventToQueryCache(
     }
   }
 
+  if (type === "todo.updated") {
+    const properties = asRecord(event.payload.properties);
+    const sessionId = asString(properties?.sessionID);
+    const todos = Array.isArray(properties?.todos) ? (properties.todos as OpenCodeTodo[]) : null;
+    if (sessionId && todos) {
+      updateTodoQueries(queryClient, sessionId, todos);
+      return Promise.resolve();
+    }
+  }
+
   if (type === "vcs.branch.updated") {
     const properties = asRecord(event.payload.properties);
     const branch = asString(properties?.branch);
@@ -158,6 +169,10 @@ function invalidateOpenCodeQueriesForEvent(
   if (type.startsWith("permission.")) {
     tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "permissions"] }));
     tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "session"] }));
+  }
+
+  if (type.startsWith("todo.")) {
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "todo"] }));
   }
 
   if (type.startsWith("vcs.")) {
@@ -310,6 +325,17 @@ function updateVcsQueries(queryClient: QueryClient, directory: string, branch: s
       continue;
     }
     queryClient.setQueryData(queryKey, { branch });
+  }
+}
+
+function updateTodoQueries(queryClient: QueryClient, sessionId: string, todos: OpenCodeTodo[]) {
+  for (const [queryKey] of queryClient.getQueriesData<OpenCodeTodo[]>({
+    queryKey: ["opencode", "todo"],
+  })) {
+    if (!sessionIdMatchesQueryInput(queryKey, sessionId)) {
+      continue;
+    }
+    queryClient.setQueryData(queryKey, todos);
   }
 }
 

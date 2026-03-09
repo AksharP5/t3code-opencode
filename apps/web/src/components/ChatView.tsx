@@ -10,6 +10,7 @@ import {
   type OpenCodePermissionRequest,
   type OpenCodeSendMessageInput,
   type OpenCodeProviderCatalog,
+  type OpenCodeTodo,
   type ProjectId,
   type ProjectEntry,
   type ProjectScript,
@@ -4012,6 +4013,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       {/* Input bar */}
       <div className={cn("px-3 pt-1.5 sm:px-5 sm:pt-2", isGitRepo ? "pb-1" : "pb-3 sm:pb-4")}>
+        {isOpenCodeThread && openCodeState.activeTodos.length > 0 ? (
+          <div className="mx-auto mb-2 w-full max-w-3xl">
+            <OpenCodeTodoDock todos={openCodeState.activeTodos} />
+          </div>
+        ) : null}
         <form
           ref={composerFormRef}
           onSubmit={onSend}
@@ -6092,6 +6098,77 @@ const OpenCodeBranchToolbar = memo(function OpenCodeBranchToolbar(props: {
         onSetThreadBranch={props.onSetThreadBranch}
         {...(props.onComposerFocusRequest ? { onComposerFocusRequest: props.onComposerFocusRequest } : {})}
       />
+    </div>
+  );
+});
+
+const OpenCodeTodoDock = memo(function OpenCodeTodoDock(props: {
+  todos: ReadonlyArray<OpenCodeTodo>;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const completed = props.todos.filter((todo) => todo.status === "completed").length;
+  const active =
+    props.todos.find((todo) => todo.status === "in_progress") ??
+    props.todos.find((todo) => todo.status === "pending") ??
+    props.todos[0] ??
+    null;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card/80 backdrop-blur-sm">
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 px-3 py-2 text-left"
+        onClick={() => setCollapsed((value) => !value)}
+      >
+        <span className="text-xs font-medium text-foreground">
+          {completed} of {props.todos.length} tasks completed
+        </span>
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {collapsed ? active?.content ?? "Tasks in progress" : "Current session todo list"}
+        </span>
+        <ChevronDownIcon
+          className={cn("size-4 text-muted-foreground transition-transform", collapsed ? "rotate-180" : "")}
+        />
+      </button>
+
+      {!collapsed ? (
+        <div className="border-t border-border/70 px-3 py-2">
+          <div className="space-y-2">
+            {props.todos.map((todo) => (
+              <div
+                key={`${todo.content}-${todo.status}-${todo.priority}`}
+                className="flex items-start gap-2 text-xs"
+              >
+                <span
+                  className={cn(
+                    "mt-1 size-1.5 rounded-full",
+                    todo.status === "completed"
+                      ? "bg-emerald-500"
+                      : todo.status === "in_progress"
+                      ? "bg-sky-500"
+                      : todo.status === "cancelled"
+                      ? "bg-zinc-400"
+                      : "bg-amber-500",
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={cn(
+                      "text-foreground",
+                      todo.status === "completed" ? "text-muted-foreground line-through" : "",
+                    )}
+                  >
+                    {todo.content}
+                  </p>
+                  <p className="mt-0.5 uppercase tracking-wide text-muted-foreground/70">
+                    {todo.status.replaceAll("_", " ")} - {todo.priority}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 });

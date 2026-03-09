@@ -4,6 +4,7 @@ import type {
   OpenCodeForkSessionInput,
   OpenCodeCreateSessionInput,
   OpenCodeEvent,
+  OpenCodeGetTodoInput,
   OpenCodeGetVcsInput,
   OpenCodeMessage,
   OpenCodePermissionRequest,
@@ -14,6 +15,7 @@ import type {
   OpenCodeSessionStatusMap,
   OpenCodeSessionSummary,
   OpenCodeStatus,
+  OpenCodeTodo,
   OpenCodeProject,
   OpenCodeUpdateSessionInput,
   OpenCodeVcsInfo,
@@ -27,6 +29,7 @@ import {
   OpenCodeProject as OpenCodeProjectSchema,
   OpenCodeSession as OpenCodeSessionSchema,
   OpenCodeSessionStatusMap as OpenCodeSessionStatusMapSchema,
+  OpenCodeTodo as OpenCodeTodoSchema,
   OpenCodeSessionSummary as OpenCodeSessionSummarySchema,
   OpenCodeVcsInfo as OpenCodeVcsInfoSchema,
 } from "@t3tools/contracts";
@@ -39,6 +42,7 @@ const decodeProviderCatalog = Schema.decodeUnknownSync(OpenCodeProviderCatalogSc
 const decodeSessions = Schema.decodeUnknownSync(Schema.Array(OpenCodeSessionSummarySchema));
 const decodeSession = Schema.decodeUnknownSync(OpenCodeSessionSchema);
 const decodeMessages = Schema.decodeUnknownSync(Schema.Array(OpenCodeMessageSchema));
+const decodeTodo = Schema.decodeUnknownSync(Schema.Array(OpenCodeTodoSchema));
 const decodeStatuses = Schema.decodeUnknownSync(OpenCodeSessionStatusMapSchema);
 const decodePermissions = Schema.decodeUnknownSync(Schema.Array(OpenCodePermissionRequestSchema));
 const decodeEvent = Schema.decodeUnknownSync(OpenCodeEventSchema);
@@ -146,6 +150,22 @@ export async function getOpenCodeMessages(
     throw new Error(`OpenCode message lookup failed with ${response.status}.`);
   }
   return Array.from(decodeMessages(await response.json()));
+}
+
+export async function getOpenCodeTodo(
+  input: OpenCodeGetTodoInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeTodo[]> {
+  const response = await fetch(
+    `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/todo`,
+    {
+      headers: buildHeaders(config),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode todo lookup failed with ${response.status}.`);
+  }
+  return Array.from(decodeTodo(await response.json()));
 }
 
 export async function getOpenCodeStatuses(

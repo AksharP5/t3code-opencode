@@ -22,6 +22,7 @@ import {
   opencodeSessionsQueryOptions,
   opencodeStatusesQueryOptions,
   opencodeStatusQueryOptions,
+  opencodeTodoQueryOptions,
   opencodeVcsQueryOptions,
 } from "./reactQuery";
 import { useOpenCodeOverlayStore } from "./overlayStore";
@@ -74,6 +75,10 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
   const permissionsQuery = useQuery({
     ...opencodePermissionsQueryOptions(config),
     enabled: statusQuery.data?.healthy === true,
+  });
+  const todoQuery = useQuery({
+    ...opencodeTodoQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
+    enabled: statusQuery.data?.healthy === true && threadId !== undefined,
   });
   const agentCatalog = useMemo(() => buildOpenCodeAgentCatalog(agentsQuery.data), [agentsQuery.data]);
 
@@ -175,6 +180,7 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     agentCatalog,
     providerCatalog: providersQuery.data ?? null,
     pendingPermissions: permissionsQuery.data ?? [],
+    activeTodos: todoQuery.data ?? [],
     projects,
     threads,
     activeThread,

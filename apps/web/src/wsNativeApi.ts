@@ -196,6 +196,7 @@ export function createWsNativeApi(): NativeApi {
       listSessions: (input) => transport.request(WS_METHODS.opencodeListSessions, input),
       getSession: (input) => transport.request(WS_METHODS.opencodeGetSession, input),
       getMessages: (input) => transport.request(WS_METHODS.opencodeGetMessages, input),
+      getTodo: (input) => transport.request(WS_METHODS.opencodeGetTodo, input),
       getStatuses: (input) => transport.request(WS_METHODS.opencodeGetStatuses, input),
       listPermissions: (input) => transport.request(WS_METHODS.opencodeListPermissions, input),
       replyPermission: (input) => transport.request(WS_METHODS.opencodeReplyPermission, input),
