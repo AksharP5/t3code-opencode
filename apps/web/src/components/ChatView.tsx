@@ -1,11 +1,15 @@
 import {
-  type ApprovalRequestId,
+  ApprovalRequestId,
   DEFAULT_MODEL_BY_PROVIDER,
   EDITORS,
   type EditorId,
   type KeybindingCommand,
   type CodexReasoningEffort,
   type MessageId,
+  type OpenCodePromptPart,
+  type OpenCodePermissionRequest,
+  type OpenCodeSendMessageInput,
+  type OpenCodeProviderCatalog,
   type ProjectId,
   type ProjectEntry,
   type ProjectScript,
@@ -16,7 +20,7 @@ import {
   type ProviderApprovalDecision,
   type ServerProviderStatus,
   type ProviderKind,
-  type ThreadId,
+  ThreadId,
   type TurnId,
   OrchestrationThreadActivity,
   RuntimeMode,
@@ -122,6 +126,7 @@ import {
   shortcutLabelForCommand,
 } from "../keybindings";
 import ChatMarkdown from "./ChatMarkdown";
+import OpenCodeMessageParts from "./OpenCodeMessageParts";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import {
@@ -207,7 +212,9 @@ import {
   type AppServiceTier,
   useAppSettings,
 } from "../appSettings";
-import { useOpenCodeMode, useOpenCodeThreadSource } from "../opencode/hooks";
+import { useOpenCodeThreadSource } from "../opencode/hooks";
+import { useOpenCodeOverlayStore } from "../opencode/overlayStore";
+import { useOpenCodeProjectOverlayStore } from "../opencode/projectOverlayStore";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -247,6 +254,51 @@ function formatWorkingTimer(startIso: string, endIso: string): string | null {
   }
 
   return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+}
+
+function openCodePermissionToPendingApproval(
+  request: OpenCodePermissionRequest,
+): PendingApproval {
+  return {
+    requestId: ApprovalRequestId.makeUnsafe(request.id),
+    requestKind: openCodePermissionToRequestKind(request.permission),
+    createdAt: new Date().toISOString(),
+    detail: buildOpenCodePermissionDetail(request),
+  };
+}
+
+function openCodePermissionToRequestKind(
+  permission: string,
+): PendingApproval["requestKind"] {
+  if (permission === "read") {
+    return "file-read";
+  }
+  if (["edit", "write", "patch", "multiedit"].includes(permission)) {
+    return "file-change";
+  }
+  return "command";
+}
+
+function buildOpenCodePermissionDetail(request: OpenCodePermissionRequest): string {
+  const pattern = request.patterns[0] ?? request.always[0] ?? "this action";
+  return `${request.permission} requires approval for ${pattern}`;
+}
+
+function openCodeRuntimeModeToPermissions(mode: RuntimeMode) {
+  if (mode === "full-access") {
+    return [{ permission: "*", pattern: "*", action: "allow" }] as const;
+  }
+  return [] as const;
+}
+
+function providerApprovalDecisionToOpenCodeReply(decision: ProviderApprovalDecision) {
+  if (decision === "accept") {
+    return "once" as const;
+  }
+  if (decision === "acceptForSession") {
+    return "always" as const;
+  }
+  return "reject" as const;
 }
 
 const LAST_EDITOR_KEY = "t3code:last-editor";
@@ -351,6 +403,8 @@ function buildExpandedImagePreview(
 function buildLocalDraftThread(
   threadId: ThreadId,
   draftThread: DraftThreadState,
+  source: Thread["source"],
+  capabilities: Thread["capabilities"],
   fallbackModel: string,
   error: string | null,
 ): Thread {
@@ -358,8 +412,8 @@ function buildLocalDraftThread(
     id: threadId,
     codexThreadId: null,
     projectId: draftThread.projectId,
-    source: "native",
-    capabilities: NATIVE_THREAD_CAPABILITIES,
+    source,
+    capabilities,
     title: "New thread",
     model: fallbackModel,
     runtimeMode: draftThread.runtimeMode,
@@ -473,6 +527,29 @@ function cloneComposerImageForRetry(image: ComposerImageAttachment): ComposerIma
   } catch {
     return image;
   }
+}
+
+async function buildOpenCodePromptParts(
+  text: string,
+  images: readonly ComposerImageAttachment[],
+): Promise<NonNullable<OpenCodeSendMessageInput["parts"]>> {
+  const parts: OpenCodePromptPart[] = [];
+  if (text.length > 0) {
+    parts.push({
+      type: "text",
+      text,
+    });
+  }
+  const imageParts = await Promise.all(
+    images.map(async (image) => ({
+      type: "file" as const,
+      mime: image.mimeType,
+      filename: image.name,
+      url: await readFileAsDataUrl(image.file),
+    })),
+  );
+  parts.push(...imageParts);
+  return parts;
 }
 
 const VscodeEntryIcon = memo(function VscodeEntryIcon(props: {
@@ -603,14 +680,14 @@ interface ChatViewProps {
 }
 
 export default function ChatView({ threadId }: ChatViewProps) {
-  const isOpenCodeMode = useOpenCodeMode();
   const openCodeState = useOpenCodeThreadSource(threadId);
   const nativeThreads = useStore((store) => store.threads);
-  const nativeProjects = useStore((store) => store.projects);
   const markThreadVisited = useStore((store) => store.markThreadVisited);
   const syncServerReadModel = useStore((store) => store.syncServerReadModel);
   const setStoreThreadError = useStore((store) => store.setError);
   const setStoreThreadBranch = useStore((store) => store.setThreadBranch);
+  const markOpenCodeThreadVisited = useOpenCodeOverlayStore((store) => store.markThreadVisited);
+  const setOpenCodeProjectScripts = useOpenCodeProjectOverlayStore((store) => store.setProjectScripts);
   const { settings } = useAppSettings();
   const openCodeConfig = useMemo(() => buildOpenCodeServerConfigInput(settings), [settings]);
   const navigate = useNavigate();
@@ -726,8 +803,24 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const storeNewTerminal = useTerminalStateStore((s) => s.newTerminal);
   const storeSetActiveTerminal = useTerminalStateStore((s) => s.setActiveTerminal);
   const storeCloseTerminal = useTerminalStateStore((s) => s.closeTerminal);
-  const projects = isOpenCodeMode ? openCodeState.projects : nativeProjects;
-  const sourceThreads = isOpenCodeMode ? openCodeState.threads : nativeThreads;
+  const projects = openCodeState.projects;
+  const sourceThreads = openCodeState.threads;
+  const openCodeDraftCapabilities = useMemo<Thread["capabilities"]>(() => {
+    const anyImageCapable = (openCodeState.providerCatalog?.all ?? []).some((provider) =>
+      Object.values(provider.models).some(
+        (model) => model.capabilities.attachment === true && model.capabilities.input.image === true,
+      ),
+    );
+    return {
+      branchSelection: true,
+      composerImages: anyImageCapable,
+      diff: true,
+      interrupt: true,
+      planMode: openCodeState.agentCatalog.planAgent !== null,
+      projectScripts: true,
+      runtimeMode: true,
+    };
+  }, [openCodeState.agentCatalog.planAgent, openCodeState.providerCatalog]);
 
   const setPrompt = useCallback(
     (nextPrompt: string) => {
@@ -754,7 +847,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [removeComposerDraftImage, threadId],
   );
 
-  const serverThread = isOpenCodeMode ? undefined : nativeThreads.find((t) => t.id === threadId);
+  const serverThread = nativeThreads.find((t) => t.id === threadId);
   const fallbackDraftProject = projects.find((project) => project.id === draftThread?.projectId);
   const localDraftError = serverThread ? null : (localDraftErrorsByThreadId[threadId] ?? null);
   const localDraftThread = useMemo(
@@ -763,16 +856,37 @@ export default function ChatView({ threadId }: ChatViewProps) {
         ? buildLocalDraftThread(
             threadId,
             draftThread,
+            fallbackDraftProject?.source ?? "native",
+            fallbackDraftProject?.source === "opencode"
+              ? openCodeDraftCapabilities
+              : NATIVE_THREAD_CAPABILITIES,
             fallbackDraftProject?.model ?? DEFAULT_MODEL_BY_PROVIDER.codex,
             localDraftError,
           )
         : undefined,
-    [draftThread, fallbackDraftProject?.model, localDraftError, threadId],
+    [
+      draftThread,
+      fallbackDraftProject?.model,
+      fallbackDraftProject?.source,
+      localDraftError,
+      openCodeDraftCapabilities,
+      threadId,
+    ],
   );
   const activeThread =
-    (isOpenCodeMode
-      ? (openCodeState.activeThread ?? sourceThreads.find((thread) => thread.id === threadId))
-      : (serverThread ?? localDraftThread)) ?? null;
+    openCodeState.activeThread ??
+    sourceThreads.find((thread) => thread.id === threadId) ??
+    serverThread ??
+    localDraftThread ??
+    null;
+  const openCodePendingApprovals = useMemo(
+    () =>
+      (activeThread?.source === "opencode"
+        ? openCodeState.pendingPermissions.filter((request) => request.sessionID === activeThread.id)
+        : []
+      ).map(openCodePermissionToPendingApproval),
+    [activeThread?.id, activeThread?.source, openCodeState.pendingPermissions],
+  );
   const isOpenCodeThread = activeThread?.source === "opencode";
   const threadCapabilities = activeThread?.capabilities ?? NATIVE_THREAD_CAPABILITIES;
   const runtimeMode =
@@ -780,7 +894,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const interactionMode =
     composerDraft.interactionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE;
   const isServerThread = serverThread !== undefined;
-  const isLocalDraftThread = !isOpenCodeMode && !isServerThread && localDraftThread !== undefined;
+  const isLocalDraftThread = !isServerThread && !isOpenCodeThread && localDraftThread !== undefined;
   const diffSearch = useMemo(
     () => parseDiffRouteSearch(rawSearch as Record<string, unknown>),
     [rawSearch],
@@ -793,7 +907,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
   useEffect(() => {
     setExternalThreadError(null);
-  }, [isOpenCodeMode, threadId]);
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!activeThread?.id) return;
+    if (activeThread.source !== "opencode") return;
+    markOpenCodeThreadVisited(activeThread.id);
+  }, [activeThread?.id, activeThread?.source, markOpenCodeThreadVisited]);
 
   useEffect(() => {
     if (!activeThread?.id) return;
@@ -817,6 +937,19 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
   const sessionProvider = activeThread?.session?.provider ?? null;
   const selectedProviderByThreadId = composerDraft.provider;
+  const openCodeModelCatalog = useMemo(
+    () => buildOpenCodeModelCatalog(openCodeState.providerCatalog, activeThread?.model ?? composerDraft.model),
+    [activeThread?.model, composerDraft.model, openCodeState.providerCatalog],
+  );
+  const openCodeSelectedAgent = useMemo(() => {
+    if (!isOpenCodeThread) {
+      return null;
+    }
+    if (interactionMode === "plan") {
+      return openCodeState.agentCatalog.planAgent;
+    }
+    return openCodeState.agentCatalog.defaultAgent;
+  }, [interactionMode, isOpenCodeThread, openCodeState.agentCatalog.defaultAgent, openCodeState.agentCatalog.planAgent]);
   const hasThreadStarted = Boolean(
     activeThread &&
     (activeThread.latestTurn !== null ||
@@ -828,23 +961,39 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const lockedProvider: ProviderKind | null = hasThreadStarted
     ? (sessionProvider ?? selectedProviderByThreadId ?? null)
     : null;
-  const selectedProvider: ProviderKind = lockedProvider ?? selectedProviderByThreadId ?? "codex";
-  const baseThreadModel = resolveModelSlugForProvider(
-    selectedProvider,
-    activeThread?.model ?? activeProject?.model ?? getDefaultModel(selectedProvider),
-  );
+  const selectedProvider: ProviderKind = isOpenCodeThread
+    ? "codex"
+    : (lockedProvider ?? selectedProviderByThreadId ?? "codex");
+  const baseThreadModel = isOpenCodeThread
+    ? (activeThread?.model ??
+      activeProject?.model ??
+      openCodeModelCatalog.options[0]?.slug ??
+      DEFAULT_MODEL_BY_PROVIDER.codex)
+    : resolveModelSlugForProvider(
+        selectedProvider,
+        activeThread?.model ?? activeProject?.model ?? getDefaultModel(selectedProvider),
+      );
   const customModelsForSelectedProvider = settings.customCodexModels;
   const selectedModel = useMemo(() => {
     const draftModel = composerDraft.model;
     if (!draftModel) {
       return baseThreadModel;
     }
+    if (isOpenCodeThread) {
+      return draftModel as ModelSlug;
+    }
     return resolveAppModelSelection(
       selectedProvider,
       customModelsForSelectedProvider,
       draftModel,
     ) as ModelSlug;
-  }, [baseThreadModel, composerDraft.model, customModelsForSelectedProvider, selectedProvider]);
+  }, [
+    baseThreadModel,
+    composerDraft.model,
+    customModelsForSelectedProvider,
+    isOpenCodeThread,
+    selectedProvider,
+  ]);
   const reasoningOptions = getReasoningEffortOptions(selectedProvider);
   const supportsReasoningEffort = reasoningOptions.length > 0;
   const selectedEffort = composerDraft.effort ?? getDefaultReasoningEffort(selectedProvider);
@@ -862,21 +1011,30 @@ export default function ChatView({ threadId }: ChatViewProps) {
   }, [selectedCodexFastModeEnabled, selectedEffort, selectedProvider, supportsReasoningEffort]);
   const selectedModelForPicker = selectedModel;
   const modelOptionsByProvider = useMemo(
-    () => getCustomModelOptionsByProvider(settings),
-    [settings],
+    () =>
+      isOpenCodeThread
+        ? { codex: openCodeModelCatalog.options }
+        : getCustomModelOptionsByProvider(settings),
+    [isOpenCodeThread, openCodeModelCatalog.options, settings],
   );
   const selectedModelForPickerWithCustomFallback = useMemo(() => {
+    if (isOpenCodeThread) {
+      return selectedModelForPicker;
+    }
     const currentOptions = modelOptionsByProvider[selectedProvider];
+    if (!currentOptions) {
+      return selectedModelForPicker;
+    }
     return currentOptions.some((option) => option.slug === selectedModelForPicker)
       ? selectedModelForPicker
       : (normalizeModelSlug(selectedModelForPicker, selectedProvider) ?? selectedModelForPicker);
-  }, [modelOptionsByProvider, selectedModelForPicker, selectedProvider]);
+  }, [isOpenCodeThread, modelOptionsByProvider, selectedModelForPicker, selectedProvider]);
   const searchableModelOptions = useMemo(
     () =>
       AVAILABLE_PROVIDER_OPTIONS.filter(
         (option) => lockedProvider === null || option.value === lockedProvider,
       ).flatMap((option) =>
-        modelOptionsByProvider[option.value].map(({ slug, name }) => ({
+        (modelOptionsByProvider[option.value] ?? []).map(({ slug, name }) => ({
           provider: option.value,
           providerLabel: option.label,
           slug,
@@ -911,6 +1069,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     () => derivePendingApprovals(threadActivities),
     [threadActivities],
   );
+  const visiblePendingApprovals = isOpenCodeThread ? openCodePendingApprovals : pendingApprovals;
   const pendingUserInputs = useMemo(
     () => derivePendingUserInputs(threadActivities),
     [threadActivities],
@@ -966,7 +1125,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     interactionMode === "plan" &&
     latestTurnSettled &&
     activeProposedPlan !== null;
-  const activePendingApproval = pendingApprovals[0] ?? null;
+  const activePendingApproval = visiblePendingApprovals[0] ?? null;
   const isComposerApprovalState = activePendingApproval !== null;
   const hasComposerHeader =
     isComposerApprovalState ||
@@ -1372,7 +1531,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const setThreadError = useCallback(
     (targetThreadId: ThreadId | null, error: string | null) => {
       if (!targetThreadId) return;
-      if (isOpenCodeMode) {
+      if (activeThread?.source === "opencode") {
         setExternalThreadError(error);
         return;
       }
@@ -1390,7 +1549,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         };
       });
     },
-    [isOpenCodeMode, nativeThreads, setStoreThreadError],
+    [activeThread?.source, nativeThreads, setStoreThreadError],
   );
 
   const focusComposer = useCallback(() => {
@@ -1569,14 +1728,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
       keybindingCommand: KeybindingCommand;
     }) => {
       const api = readNativeApi();
-      if (!api) return;
+      if (!api || !activeProject) return;
 
-      await api.orchestration.dispatchCommand({
-        type: "project.meta.update",
-        commandId: newCommandId(),
-        projectId: input.projectId,
-        scripts: input.nextScripts,
-      });
+      if (activeProject.source === "opencode") {
+        setOpenCodeProjectScripts(activeProject.cwd, input.nextScripts);
+      } else {
+        await api.orchestration.dispatchCommand({
+          type: "project.meta.update",
+          commandId: newCommandId(),
+          projectId: input.projectId,
+          scripts: input.nextScripts,
+        });
+      }
 
       const keybindingRule = decodeProjectScriptKeybindingRule({
         keybinding: input.keybinding,
@@ -1588,7 +1751,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         await queryClient.invalidateQueries({ queryKey: serverQueryKeys.all });
       }
     },
-    [queryClient],
+    [activeProject, queryClient, setOpenCodeProjectScripts],
   );
   const saveProjectScript = useCallback(
     async (input: NewProjectScriptInput) => {
@@ -1660,20 +1823,42 @@ export default function ChatView({ threadId }: ChatViewProps) {
   );
 
   const handleRuntimeModeChange = useCallback(
-    (mode: RuntimeMode) => {
+    async (mode: RuntimeMode) => {
       if (mode === runtimeMode) return;
       if (!threadCapabilities.runtimeMode) {
-        setThreadError(threadId, "Runtime mode changes are not available for OpenCode-backed threads yet.");
+        setThreadError(threadId, "Runtime mode changes are not available for this session.");
         return;
       }
       setComposerDraftRuntimeMode(threadId, mode);
+      if (activeThread?.source === "opencode") {
+        const api = readNativeApi();
+        if (!api) {
+          return;
+        }
+        await api.opencode
+          .updateSession({
+            ...openCodeConfig,
+            sessionId: threadId,
+            permission: [...openCodeRuntimeModeToPermissions(mode)],
+          })
+          .catch((err: unknown) => {
+            setThreadError(
+              threadId,
+              err instanceof Error ? err.message : "Failed to update runtime mode.",
+            );
+          });
+        scheduleComposerFocus();
+        return;
+      }
       if (isLocalDraftThread) {
         setDraftThreadContext(threadId, { runtimeMode: mode });
       }
       scheduleComposerFocus();
     },
     [
+      activeThread?.source,
       isLocalDraftThread,
+      openCodeConfig,
       runtimeMode,
       scheduleComposerFocus,
       setComposerDraftRuntimeMode,
@@ -1688,7 +1873,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     (mode: ProviderInteractionMode) => {
       if (mode === interactionMode) return;
       if (!threadCapabilities.planMode) {
-        setThreadError(threadId, "Plan mode is not available for OpenCode-backed threads yet.");
+        setThreadError(threadId, "Plan mode is not available for this session.");
         return;
       }
       setComposerDraftInteractionMode(threadId, mode);
@@ -2322,7 +2507,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const addComposerImages = (files: File[]) => {
     if (!activeThreadId || files.length === 0) return;
     if (!threadCapabilities.composerImages) {
-      setThreadError(activeThreadId, "Image attachments are not available for OpenCode-backed threads yet.");
+      setThreadError(activeThreadId, "Image attachments are not available for this session.");
       return;
     }
 
@@ -2522,9 +2707,24 @@ export default function ChatView({ threadId }: ChatViewProps) {
     const threadIdForSend = activeThread.id;
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
+    const composerImagesSnapshot = [...composerImages];
     if (isOpenCodeThread) {
+      if (!activeProject) return;
+      const selectedOpenCodeModel = openCodeModelCatalog.lookup.get(selectedModel);
+      const parts = await buildOpenCodePromptParts(trimmed, composerImagesSnapshot);
+      const isOpenCodeDraftThread = activeThread.session === null;
+      const shouldCreateWorktree =
+        isOpenCodeDraftThread && envMode === "worktree" && !activeThread.worktreePath;
+      if (shouldCreateWorktree && !activeThread.branch) {
+        setStoreThreadError(
+          threadIdForSend,
+          "Select a base branch before sending in New worktree mode.",
+        );
+        return;
+      }
+
       sendInFlightRef.current = true;
-      beginSendPhase("sending-turn");
+      beginSendPhase(shouldCreateWorktree ? "preparing-worktree" : "sending-turn");
       setThreadError(threadIdForSend, null);
       shouldAutoScrollRef.current = true;
       forceStickToBottom();
@@ -2534,26 +2734,68 @@ export default function ChatView({ threadId }: ChatViewProps) {
       setComposerCursor(0);
       setComposerTrigger(null);
 
-      await api.opencode
-        .sendMessage({
+      let targetThreadId = threadIdForSend;
+      let targetSessionId: string = threadIdForSend;
+
+      try {
+        if (isOpenCodeDraftThread) {
+          let targetDirectory = activeProject.cwd;
+          if (shouldCreateWorktree) {
+            const newBranch = buildTemporaryWorktreeBranchName();
+            const result = await createWorktreeMutation.mutateAsync({
+              cwd: activeProject.cwd,
+              branch: activeThread.branch!,
+              newBranch,
+            });
+            targetDirectory = result.worktree.path;
+          }
+
+          const session = await api.opencode.createSession({
+            ...openCodeConfig,
+            directory: targetDirectory,
+            permission: [...openCodeRuntimeModeToPermissions(runtimeMode)],
+          });
+          targetThreadId = ThreadId.makeUnsafe(session.id);
+          targetSessionId = session.id;
+          clearDraftThread(threadIdForSend);
+          await navigate({
+            to: "/$threadId",
+            params: { threadId: targetThreadId },
+            replace: true,
+          });
+        }
+
+        await api.opencode.sendMessage({
           ...openCodeConfig,
-          sessionId: threadIdForSend,
-          text: trimmed,
-        })
-        .catch((err: unknown) => {
-          promptRef.current = trimmed;
-          setPrompt(trimmed);
-          setComposerCursor(trimmed.length);
-          setComposerTrigger(detectComposerTrigger(trimmed, trimmed.length));
-          setThreadError(
-            threadIdForSend,
-            err instanceof Error ? err.message : "Failed to send message.",
-          );
-        })
-        .finally(() => {
-          sendInFlightRef.current = false;
-          resetSendPhase();
+          sessionId: targetSessionId,
+          parts,
+          ...(openCodeSelectedAgent ? { agent: openCodeSelectedAgent } : {}),
+          ...(selectedOpenCodeModel ? { model: selectedOpenCodeModel } : {}),
         });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to send message.";
+        promptRef.current = trimmed;
+        setComposerDraftPrompt(targetThreadId, trimmed);
+        if (composerImagesSnapshot.length > 0) {
+          addComposerDraftImages(
+            targetThreadId,
+            composerImagesSnapshot.map(cloneComposerImageForRetry),
+          );
+        }
+        setComposerCursor(trimmed.length);
+        setComposerTrigger(detectComposerTrigger(trimmed, trimmed.length));
+        if (targetThreadId !== threadIdForSend) {
+          toastManager.add({
+            type: "error",
+            title: "Failed to send message",
+            description: message,
+          });
+        }
+        setThreadError(targetThreadId, message);
+      } finally {
+        sendInFlightRef.current = false;
+        resetSendPhase();
+      }
       return;
     }
     if (!activeProject) return;
@@ -2578,7 +2820,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     sendInFlightRef.current = true;
     beginSendPhase(baseBranchForWorktree ? "preparing-worktree" : "sending-turn");
 
-    const composerImagesSnapshot = [...composerImages];
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
         type: "image" as const,
@@ -2830,6 +3071,23 @@ export default function ChatView({ threadId }: ChatViewProps) {
       setRespondingRequestIds((existing) =>
         existing.includes(requestId) ? existing : [...existing, requestId],
       );
+      if (activeThread?.source === "opencode") {
+        await api.opencode
+          .replyPermission({
+            ...openCodeConfig,
+            requestId,
+            reply: providerApprovalDecisionToOpenCodeReply(decision),
+          })
+          .catch((err: unknown) => {
+            setThreadError(
+              activeThreadId,
+              err instanceof Error ? err.message : "Failed to submit approval decision.",
+            );
+          });
+        setRespondingRequestIds((existing) => existing.filter((id) => id !== requestId));
+        return;
+      }
+
       await api.orchestration
         .dispatchCommand({
           type: "thread.approval.respond",
@@ -2847,7 +3105,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         });
       setRespondingRequestIds((existing) => existing.filter((id) => id !== requestId));
     },
-    [activeThreadId, setStoreThreadError],
+    [activeThread?.source, activeThreadId, openCodeConfig, setStoreThreadError, setThreadError],
   );
 
   const onRespondToUserInput = useCallback(
@@ -3196,7 +3454,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
     (provider: ProviderKind, model: ModelSlug) => {
       if (!activeThread) return;
       if (isOpenCodeThread) {
-        setThreadError(activeThread.id, "Model selection is controlled by OpenCode for this session.");
+        setComposerDraftModel(activeThread.id, model);
+        scheduleComposerFocus();
         return;
       }
       if (lockedProvider !== null && provider !== lockedProvider) {
@@ -3217,14 +3476,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
       scheduleComposerFocus,
       setComposerDraftModel,
       setComposerDraftProvider,
-      setThreadError,
       settings.customCodexModels,
     ],
   );
   const onEffortSelect = useCallback(
     (effort: CodexReasoningEffort) => {
       if (isOpenCodeThread) {
-        setThreadError(threadId, "Reasoning settings are controlled by OpenCode for this session.");
+        setThreadError(threadId, "Reasoning settings are not configurable for this session.");
         return;
       }
       setComposerDraftEffort(threadId, effort);
@@ -3235,7 +3493,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const onCodexFastModeChange = useCallback(
     (enabled: boolean) => {
       if (isOpenCodeThread) {
-        setThreadError(threadId, "Reasoning settings are controlled by OpenCode for this session.");
+        setThreadError(threadId, "Reasoning settings are not configurable for this session.");
         return;
       }
       setComposerDraftCodexFastMode(threadId, enabled);
@@ -3506,7 +3764,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     void onRevertToTurnCount(targetTurnCount);
   };
 
-  if (isOpenCodeMode && !openCodeState.threadsHydrated) {
+  if (!openCodeState.threadsHydrated) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
         Loading OpenCode session...
@@ -3514,7 +3772,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     );
   }
 
-  if (isOpenCodeMode && openCodeState.status && !openCodeState.status.healthy) {
+  if (openCodeState.status && !openCodeState.status.healthy) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
         <header
@@ -3580,7 +3838,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
           activeThreadId={activeThread.id}
           activeThreadTitle={activeThread.title}
           activeProjectName={activeProject?.name}
-          sessionSource={activeThread.source}
           isGitRepo={isGitRepo}
           openInCwd={activeThread.worktreePath ?? activeProject?.cwd ?? null}
           activeProjectScripts={threadCapabilities.projectScripts ? activeProject?.scripts : undefined}
@@ -3824,7 +4081,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     lockedProvider={lockedProvider}
                     modelOptionsByProvider={modelOptionsByProvider}
                     serviceTierSetting={selectedServiceTierSetting}
-                    disabled={isOpenCodeThread}
+                    disabled={false}
                     onProviderModelChange={onProviderModelSelect}
                   />
 
@@ -3855,7 +4112,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     disabled={!threadCapabilities.planMode}
                     title={
                       !threadCapabilities.planMode
-                        ? "Plan mode is not available for OpenCode-backed threads yet"
+                        ? "Plan mode is not available for this session"
                         : interactionMode === "plan"
                         ? "Plan mode — click to return to normal chat mode"
                         : "Default mode — click to enter plan mode"
@@ -3884,7 +4141,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     disabled={!threadCapabilities.runtimeMode}
                     title={
                       !threadCapabilities.runtimeMode
-                        ? "Runtime mode changes are not available for OpenCode-backed threads yet"
+                        ? "Runtime mode changes are not available for this session"
                         : runtimeMode === "full-access"
                         ? "Full access — click to require approvals"
                         : "Approval required — click for full access"
@@ -4173,7 +4430,6 @@ interface ChatHeaderProps {
   activeThreadId: ThreadId;
   activeThreadTitle: string;
   activeProjectName: string | undefined;
-  sessionSource: Thread["source"];
   isGitRepo: boolean;
   openInCwd: string | null;
   activeProjectScripts: ProjectScript[] | undefined;
@@ -4194,7 +4450,6 @@ const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   activeThreadTitle,
   activeProjectName,
-  sessionSource,
   isGitRepo,
   openInCwd,
   activeProjectScripts,
@@ -4225,7 +4480,6 @@ const ChatHeader = memo(function ChatHeader({
             {activeProjectName}
           </Badge>
         )}
-        {sessionSource === "opencode" && <Badge variant="outline">OpenCode</Badge>}
         {activeProjectName && !isGitRepo && (
           <Badge variant="outline" className="shrink-0 text-[10px] text-amber-700">
             No Git
@@ -4269,7 +4523,7 @@ const ChatHeader = memo(function ChatHeader({
           />
           <TooltipPopup side="bottom">
             {!diffEnabled
-              ? "Diff view is not available for OpenCode-backed threads yet."
+              ? "Diff view is unavailable for this session."
               : !isGitRepo
               ? "Diff panel is unavailable because this project is not a git repository."
               : diffToggleShortcutLabel
@@ -5300,6 +5554,9 @@ const MessagesTimeline = memo(function MessagesTimeline({
                     {row.message.text}
                   </pre>
                 )}
+                {row.message.structuredParts && row.message.structuredParts.length > 0 ? (
+                  <OpenCodeMessageParts parts={row.message.structuredParts} cwd={markdownCwd} />
+                ) : null}
                 <div className="mt-1.5 flex items-center justify-end gap-2">
                   <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
                     {row.message.text && <MessageCopyButton text={row.message.text} />}
@@ -5346,6 +5603,9 @@ const MessagesTimeline = memo(function MessagesTimeline({
                   cwd={markdownCwd}
                   isStreaming={Boolean(row.message.streaming)}
                 />
+                {row.message.structuredParts && row.message.structuredParts.length > 0 ? (
+                  <OpenCodeMessageParts parts={row.message.structuredParts} cwd={markdownCwd} />
+                ) : null}
                 {(() => {
                   const turnSummary = turnDiffSummaryByAssistantMessageId.get(row.message.id);
                   if (!turnSummary) return null;
@@ -5512,11 +5772,73 @@ function getCustomModelOptionsByProvider(settings: {
   };
 }
 
+function buildOpenCodeModelCatalog(
+  catalog: OpenCodeProviderCatalog | null,
+  selectedModel: string | null | undefined,
+): {
+  options: ReadonlyArray<{ slug: string; name: string }>;
+  lookup: ReadonlyMap<string, { providerID: string; modelID: string }>;
+} {
+  const lookup = new Map<string, { providerID: string; modelID: string }>();
+  const options: Array<{ slug: string; name: string }> = [];
+  const connectedProviderIds = new Set(catalog?.connected ?? []);
+  const providers =
+    catalog && connectedProviderIds.size > 0
+      ? catalog.all.filter((provider) => connectedProviderIds.has(provider.id))
+      : (catalog?.all ?? []);
+
+  for (const provider of providers) {
+    for (const model of Object.values(provider.models)) {
+      if (lookup.has(model.id)) {
+        continue;
+      }
+      lookup.set(model.id, {
+        providerID: model.providerID,
+        modelID: model.id,
+      });
+      options.push({
+        slug: model.id,
+        name: model.name,
+      });
+    }
+  }
+
+  if (selectedModel && !lookup.has(selectedModel)) {
+    options.push({
+      slug: selectedModel,
+      name: selectedModel,
+    });
+  }
+
+  options.sort((left, right) => left.name.localeCompare(right.name));
+  return {
+    options,
+    lookup,
+  };
+}
+
 const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   codex: OpenAI,
   claudeCode: ClaudeAI,
   cursor: CursorIcon,
 };
+
+function resolveProviderIcon(provider: string): Icon {
+  const knownIcon = PROVIDER_ICON_BY_PROVIDER[provider as keyof typeof PROVIDER_ICON_BY_PROVIDER];
+  if (knownIcon) {
+    return knownIcon;
+  }
+  if (provider.includes("anthropic") || provider.includes("claude")) {
+    return ClaudeAI;
+  }
+  if (provider.includes("google") || provider.includes("gemini")) {
+    return Gemini;
+  }
+  if (provider.includes("cursor")) {
+    return CursorIcon;
+  }
+  return OpenAI;
+}
 
 function resolveModelForProviderPicker(
   provider: ProviderKind,
@@ -5555,16 +5877,16 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   provider: ProviderKind;
   model: ModelSlug;
   lockedProvider: ProviderKind | null;
-  modelOptionsByProvider: Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>>;
+  modelOptionsByProvider: Record<string, ReadonlyArray<{ slug: string; name: string }>>;
   serviceTierSetting: AppServiceTier;
   disabled?: boolean;
   onProviderModelChange: (provider: ProviderKind, model: ModelSlug) => void;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const selectedProviderOptions = props.modelOptionsByProvider[props.provider];
+  const selectedProviderOptions = props.modelOptionsByProvider[props.provider] ?? [];
   const selectedModelLabel =
     selectedProviderOptions.find((option) => option.slug === props.model)?.name ?? props.model;
-  const ProviderIcon = PROVIDER_ICON_BY_PROVIDER[props.provider];
+  const ProviderIcon = resolveProviderIcon(props.provider);
 
   return (
     <Menu
@@ -5598,7 +5920,7 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       </MenuTrigger>
       <MenuPopup align="start">
         {AVAILABLE_PROVIDER_OPTIONS.map((option) => {
-          const OptionIcon = PROVIDER_ICON_BY_PROVIDER[option.value];
+          const OptionIcon = resolveProviderIcon(option.value);
           const isDisabledByProviderLock =
             props.lockedProvider !== null && props.lockedProvider !== option.value;
           return (
@@ -5621,14 +5943,14 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                       const resolvedModel = resolveModelForProviderPicker(
                         option.value,
                         value,
-                        props.modelOptionsByProvider[option.value],
+                        props.modelOptionsByProvider[option.value] ?? [],
                       );
                       if (!resolvedModel) return;
                       props.onProviderModelChange(option.value, resolvedModel);
                       setIsMenuOpen(false);
                     }}
                   >
-                    {props.modelOptionsByProvider[option.value].map((modelOption) => (
+                    {(props.modelOptionsByProvider[option.value] ?? []).map((modelOption) => (
                       <MenuRadioItem
                         key={`${option.value}:${modelOption.slug}`}
                         value={modelOption.slug}
@@ -5649,7 +5971,7 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         })}
         {UNAVAILABLE_PROVIDER_OPTIONS.length > 0 && <MenuDivider />}
         {UNAVAILABLE_PROVIDER_OPTIONS.map((option) => {
-          const OptionIcon = PROVIDER_ICON_BY_PROVIDER[option.value];
+          const OptionIcon = resolveProviderIcon(option.value);
           return (
             <MenuItem key={option.value} disabled>
               <OptionIcon

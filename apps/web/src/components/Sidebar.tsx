@@ -8,29 +8,26 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  DEFAULT_RUNTIME_MODE,
-  DEFAULT_MODEL_BY_PROVIDER,
   type DesktopUpdateState,
   ProjectId,
   ThreadId,
   type GitStatusResult,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { buildOpenCodeServerConfigInput, useAppSettings } from "../appSettings";
 import { isElectron } from "../env";
 import { APP_STAGE_LABEL } from "../branding";
-import { newCommandId, newProjectId, newThreadId } from "../lib/utils";
-import { useStore } from "../store";
 import { isChatNewLocalShortcut, isChatNewShortcut, shortcutLabelForCommand } from "../keybindings";
 import { type Thread } from "../types";
 import { derivePendingApprovals } from "../session-logic";
-import { gitRemoveWorktreeMutationOptions, gitStatusQueryOptions } from "../lib/gitReactQuery";
+import { gitStatusQueryOptions } from "../lib/gitReactQuery";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
-import { useOpenCodeMode, useOpenCodeThreadSource } from "../opencode/hooks";
-import { type DraftThreadEnvMode, useComposerDraftStore } from "../composerDraftStore";
+import { useOpenCodeThreadSource } from "../opencode/hooks";
+import { opencodeQueryKeys } from "../opencode/reactQuery";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { toastManager } from "./ui/toast";
 import {
@@ -59,8 +56,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "./ui/sidebar";
-import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
-import { isNonEmpty as isNonEmptyString } from "effect/String";
+import { newThreadId } from "~/lib/utils";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_PREVIEW_LIMIT = 6;
@@ -280,26 +276,7 @@ function ProjectFavicon({ cwd }: { cwd: string }) {
 }
 
 export default function Sidebar() {
-  const isOpenCodeMode = useOpenCodeMode();
-  const projects = useStore((store) => store.projects);
-  const threads = useStore((store) => store.threads);
-  const markThreadUnread = useStore((store) => store.markThreadUnread);
-  const toggleProject = useStore((store) => store.toggleProject);
-  const clearComposerDraftForThread = useComposerDraftStore((store) => store.clearThreadDraft);
-  const getDraftThreadByProjectId = useComposerDraftStore(
-    (store) => store.getDraftThreadByProjectId,
-  );
-  const getDraftThread = useComposerDraftStore((store) => store.getDraftThread);
   const terminalStateByThreadId = useTerminalStateStore((state) => state.terminalStateByThreadId);
-  const clearTerminalState = useTerminalStateStore((state) => state.clearTerminalState);
-  const setProjectDraftThreadId = useComposerDraftStore((store) => store.setProjectDraftThreadId);
-  const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
-  const clearProjectDraftThreadId = useComposerDraftStore(
-    (store) => store.clearProjectDraftThreadId,
-  );
-  const clearProjectDraftThreadById = useComposerDraftStore(
-    (store) => store.clearProjectDraftThreadById,
-  );
   const navigate = useNavigate();
   const { settings: appSettings } = useAppSettings();
   const routeThreadId = useParams({
@@ -310,13 +287,14 @@ export default function Sidebar() {
     ...serverConfigQueryOptions(),
     select: (config) => config.keybindings,
   });
-  const queryClient = useQueryClient();
-  const removeWorktreeMutation = useMutation(gitRemoveWorktreeMutationOptions({ queryClient }));
   const openCodeState = useOpenCodeThreadSource(routeThreadId ?? undefined);
   const openCodeConfig = useMemo(
     () => buildOpenCodeServerConfigInput(appSettings),
     [appSettings],
   );
+  const queryClient = useQueryClient();
+  const getDraftThreadByProjectId = useComposerDraftStore((store) => store.getDraftThreadByProjectId);
+  const setProjectDraftThreadId = useComposerDraftStore((store) => store.setProjectDraftThreadId);
   const [addingProject, setAddingProject] = useState(false);
   const [newCwd, setNewCwd] = useState("");
   const [isPickingFolder, setIsPickingFolder] = useState(false);
@@ -332,8 +310,8 @@ export default function Sidebar() {
   const renamingCommittedRef = useRef(false);
   const renamingInputRef = useRef<HTMLInputElement | null>(null);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
-  const visibleProjects = isOpenCodeMode ? openCodeState.projects : projects;
-  const visibleThreads = isOpenCodeMode ? openCodeState.threads : threads;
+  const visibleProjects = openCodeState.projects;
+  const visibleThreads = openCodeState.threads;
   const sortedVisibleProjects = useMemo(() => {
     const latestActivityByProjectId = new Map<ProjectId, number>();
 
@@ -357,10 +335,17 @@ export default function Sidebar() {
   const pendingApprovalByThreadId = useMemo(() => {
     const map = new Map<ThreadId, boolean>();
     for (const thread of visibleThreads) {
+      if (thread.source === "opencode") {
+        map.set(
+          thread.id,
+          openCodeState.pendingPermissions.some((request) => request.sessionID === thread.id),
+        );
+        continue;
+      }
       map.set(thread.id, derivePendingApprovals(thread.activities).length > 0);
     }
     return map;
-  }, [visibleThreads]);
+  }, [openCodeState.pendingPermissions, visibleThreads]);
   const projectCwdById = useMemo(
     () => new Map(sortedVisibleProjects.map((project) => [project.id, project.cwd] as const)),
     [sortedVisibleProjects],
@@ -434,104 +419,44 @@ export default function Sidebar() {
       });
     });
   }, []);
+  const refreshOpenCodeQueries = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: opencodeQueryKeys.all });
+  }, [queryClient]);
 
   const handleNewThread = useCallback(
-    (
-      projectId: ProjectId,
-      options?: {
-        branch?: string | null;
-        worktreePath?: string | null;
-        envMode?: DraftThreadEnvMode;
-      },
-    ): Promise<void> => {
-      if (isOpenCodeMode) {
-        const api = readNativeApi();
-        const project = visibleProjects.find((entry) => entry.id === projectId);
-        if (!api || !project) {
-          return Promise.resolve();
-        }
-        return (async () => {
-          const session = await api.opencode.createSession({
-            ...openCodeConfig,
-            directory: project.cwd,
-          });
-          await navigate({
-            to: "/$threadId",
-            params: { threadId: ThreadId.makeUnsafe(session.id) },
-          });
-        })();
-      }
-
-      const hasBranchOption = options?.branch !== undefined;
-      const hasWorktreePathOption = options?.worktreePath !== undefined;
-      const hasEnvModeOption = options?.envMode !== undefined;
-      const storedDraftThread = getDraftThreadByProjectId(projectId);
-      if (storedDraftThread) {
-        return (async () => {
-          if (hasBranchOption || hasWorktreePathOption || hasEnvModeOption) {
-            setDraftThreadContext(storedDraftThread.threadId, {
-              ...(hasBranchOption ? { branch: options?.branch ?? null } : {}),
-              ...(hasWorktreePathOption ? { worktreePath: options?.worktreePath ?? null } : {}),
-              ...(hasEnvModeOption ? { envMode: options?.envMode } : {}),
-            });
-          }
-          setProjectDraftThreadId(projectId, storedDraftThread.threadId);
-          if (routeThreadId === storedDraftThread.threadId) {
-            return;
-          }
-          await navigate({
-            to: "/$threadId",
-            params: { threadId: storedDraftThread.threadId },
-          });
-        })();
-      }
-      clearProjectDraftThreadId(projectId);
-
-      const activeDraftThread = routeThreadId ? getDraftThread(routeThreadId) : null;
-      if (activeDraftThread && routeThreadId && activeDraftThread.projectId === projectId) {
-        if (hasBranchOption || hasWorktreePathOption || hasEnvModeOption) {
-          setDraftThreadContext(routeThreadId, {
-            ...(hasBranchOption ? { branch: options?.branch ?? null } : {}),
-            ...(hasWorktreePathOption ? { worktreePath: options?.worktreePath ?? null } : {}),
-            ...(hasEnvModeOption ? { envMode: options?.envMode } : {}),
-          });
-        }
-        setProjectDraftThreadId(projectId, routeThreadId);
+    (projectId: ProjectId): Promise<void> => {
+      const project = visibleProjects.find((entry) => entry.id === projectId);
+      if (!project) {
         return Promise.resolve();
       }
-      const threadId = newThreadId();
-      const createdAt = new Date().toISOString();
       return (async () => {
-        setProjectDraftThreadId(projectId, threadId, {
-          createdAt,
-          branch: options?.branch ?? null,
-          worktreePath: options?.worktreePath ?? null,
-          envMode: options?.envMode ?? "local",
-          runtimeMode: DEFAULT_RUNTIME_MODE,
-        });
-
+        const existingDraft = getDraftThreadByProjectId(projectId);
+        const nextThreadId = existingDraft?.threadId ?? newThreadId();
+        if (!existingDraft) {
+          setProjectDraftThreadId(projectId, nextThreadId, {
+            runtimeMode: "approval-required",
+          });
+        }
         await navigate({
           to: "/$threadId",
-          params: { threadId },
+          params: { threadId: nextThreadId },
         });
       })();
     },
-    [
-      clearProjectDraftThreadId,
-      getDraftThreadByProjectId,
-      isOpenCodeMode,
-      navigate,
-      openCodeConfig,
-      getDraftThread,
-      routeThreadId,
-      setDraftThreadContext,
-      setProjectDraftThreadId,
-      visibleProjects,
-    ],
+    [getDraftThreadByProjectId, navigate, setProjectDraftThreadId, visibleProjects],
   );
 
   const focusMostRecentThreadForProject = useCallback(
     (projectId: ProjectId) => {
+      const draftThread = getDraftThreadByProjectId(projectId);
+      if (draftThread) {
+        void navigate({
+          to: "/$threadId",
+          params: { threadId: draftThread.threadId },
+        });
+        return;
+      }
+
       const latestThread = visibleThreads
         .filter((thread) => thread.projectId === projectId)
         .toSorted((a, b) => {
@@ -546,7 +471,7 @@ export default function Sidebar() {
         params: { threadId: latestThread.id },
       });
     },
-    [navigate, visibleThreads],
+    [getDraftThreadByProjectId, navigate, visibleThreads],
   );
 
   const addProjectFromPath = useCallback(
@@ -570,51 +495,22 @@ export default function Sidebar() {
         return;
       }
 
-      if (isOpenCodeMode) {
-        try {
-          const session = await api.opencode.createSession({
-            ...openCodeConfig,
-            directory: cwd,
-          });
-          await navigate({
-            to: "/$threadId",
-            params: { threadId: ThreadId.makeUnsafe(session.id) },
-          });
-        } catch (error) {
-          setIsAddingProject(false);
-          toastManager.add({
-            type: "error",
-            title: "Unable to create OpenCode session",
-            description:
-              error instanceof Error ? error.message : "An error occurred while creating the session.",
-          });
-          return;
-        }
-        finishAddingProject();
-        return;
-      }
-
-      const projectId = newProjectId();
-      const createdAt = new Date().toISOString();
-      const title = cwd.split(/[/\\]/).findLast(isNonEmptyString) ?? cwd;
       try {
-        await api.orchestration.dispatchCommand({
-          type: "project.create",
-          commandId: newCommandId(),
-          projectId,
-          title,
-          workspaceRoot: cwd,
-          defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
-          createdAt,
+        const session = await api.opencode.createSession({
+          ...openCodeConfig,
+          directory: cwd,
         });
-        await handleNewThread(projectId).catch(() => undefined);
+        await navigate({
+          to: "/$threadId",
+          params: { threadId: ThreadId.makeUnsafe(session.id) },
+        });
       } catch (error) {
         setIsAddingProject(false);
         toastManager.add({
           type: "error",
-          title: "Unable to add project",
+          title: "Unable to create OpenCode session",
           description:
-            error instanceof Error ? error.message : "An error occurred while adding the project.",
+            error instanceof Error ? error.message : "An error occurred while creating the session.",
         });
         return;
       }
@@ -622,9 +518,7 @@ export default function Sidebar() {
     },
     [
       focusMostRecentThreadForProject,
-      handleNewThread,
       isAddingProject,
-      isOpenCodeMode,
       navigate,
       openCodeConfig,
       visibleProjects,
@@ -668,7 +562,7 @@ export default function Sidebar() {
 
       const trimmed = newTitle.trim();
       if (trimmed.length === 0) {
-        toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+        toastManager.add({ type: "warning", title: "Session title cannot be empty" });
         finishRename();
         return;
       }
@@ -682,267 +576,145 @@ export default function Sidebar() {
         return;
       }
       try {
-        await api.orchestration.dispatchCommand({
-          type: "thread.meta.update",
-          commandId: newCommandId(),
-          threadId,
+        await api.opencode.updateSession({
+          ...openCodeConfig,
+          sessionId: threadId,
           title: trimmed,
         });
+        await refreshOpenCodeQueries();
       } catch (error) {
         toastManager.add({
           type: "error",
-          title: "Failed to rename thread",
+          title: "Failed to rename session",
           description: error instanceof Error ? error.message : "An error occurred.",
         });
       }
       finishRename();
     },
-    [],
+    [openCodeConfig, refreshOpenCodeQueries],
   );
 
   const handleThreadContextMenu = useCallback(
     async (threadId: ThreadId, position: { x: number; y: number }) => {
       const api = readNativeApi();
       if (!api) return;
-      if (isOpenCodeMode) {
-        const clicked = await api.contextMenu.show(
-          [{ id: "copy-thread-id", label: "Copy Session ID" }],
-          position,
-        );
-        if (clicked !== "copy-thread-id") {
-          return;
-        }
-        try {
-          await copyTextToClipboard(threadId);
-          toastManager.add({
-            type: "success",
-            title: "Session ID copied",
-            description: threadId,
-          });
-        } catch (error) {
-          toastManager.add({
-            type: "error",
-            title: "Failed to copy session ID",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
-        }
+      const thread = visibleThreads.find((entry) => entry.id === threadId);
+      if (!thread) {
         return;
       }
       const clicked = await api.contextMenu.show(
         [
-          { id: "rename", label: "Rename thread" },
-          { id: "mark-unread", label: "Mark unread" },
-          { id: "copy-thread-id", label: "Copy Thread ID" },
-          { id: "delete", label: "Delete", destructive: true },
+          { id: "rename", label: "Rename session" },
+          { id: "fork", label: "Fork session" },
+          { id: "copy-thread-id", label: "Copy Session ID" },
+          { id: "delete", label: "Delete session", destructive: true },
         ],
         position,
       );
-      const thread = threads.find((t) => t.id === threadId);
-      if (!thread) return;
-
       if (clicked === "rename") {
         setRenamingThreadId(threadId);
         setRenamingTitle(thread.title);
         renamingCommittedRef.current = false;
         return;
       }
-
-      if (clicked === "mark-unread") {
-        markThreadUnread(threadId);
-        return;
-      }
-      if (clicked === "copy-thread-id") {
+      if (clicked === "fork") {
         try {
-          await copyTextToClipboard(threadId);
-          toastManager.add({
-            type: "success",
-            title: "Thread ID copied",
-            description: threadId,
+          const forked = await api.opencode.forkSession({
+            ...openCodeConfig,
+            sessionId: threadId,
+          });
+          await refreshOpenCodeQueries();
+          await navigate({
+            to: "/$threadId",
+            params: { threadId: ThreadId.makeUnsafe(forked.id) },
           });
         } catch (error) {
           toastManager.add({
             type: "error",
-            title: "Failed to copy thread ID",
+            title: "Failed to fork session",
             description: error instanceof Error ? error.message : "An error occurred.",
           });
         }
         return;
       }
-      if (clicked !== "delete") return;
-      if (appSettings.confirmThreadDelete) {
-        const confirmed = await api.dialogs.confirm(
-          [
-            `Delete thread "${thread.title}"?`,
-            "This permanently clears conversation history for this thread.",
-          ].join("\n"),
-        );
-        if (!confirmed) {
-          return;
+      if (clicked === "delete") {
+        if (appSettings.confirmThreadDelete) {
+          const confirmed = await api.dialogs.confirm(
+            [
+              `Delete session "${thread.title}"?`,
+              "This permanently clears conversation history for this session.",
+            ].join("\n"),
+          );
+          if (!confirmed) {
+            return;
+          }
         }
-      }
-      const threadProject = projects.find((project) => project.id === thread.projectId);
-      const orphanedWorktreePath = getOrphanedWorktreePathForThread(threads, threadId);
-      const displayWorktreePath = orphanedWorktreePath
-        ? formatWorktreePathForDisplay(orphanedWorktreePath)
-        : null;
-      const canDeleteWorktree = orphanedWorktreePath !== null && threadProject !== undefined;
-      const shouldDeleteWorktree =
-        canDeleteWorktree &&
-        (await api.dialogs.confirm(
-          [
-            "This thread is the only one linked to this worktree:",
-            displayWorktreePath ?? orphanedWorktreePath,
-            "",
-            "Delete the worktree too?",
-          ].join("\n"),
-        ));
 
-      if (thread.session && thread.session.status !== "closed") {
-        await api.orchestration
-          .dispatchCommand({
-            type: "thread.session.stop",
-            commandId: newCommandId(),
-            threadId,
-            createdAt: new Date().toISOString(),
-          })
-          .catch(() => undefined);
-      }
-
-      try {
-        await api.terminal.close({
-          threadId,
-          deleteHistory: true,
-        });
-      } catch {
-        // Terminal may already be closed
-      }
-
-      const shouldNavigateToFallback = routeThreadId === threadId;
-      const fallbackThreadId = threads.find((entry) => entry.id !== threadId)?.id ?? null;
-      await api.orchestration.dispatchCommand({
-        type: "thread.delete",
-        commandId: newCommandId(),
-        threadId,
-      });
-      clearComposerDraftForThread(threadId);
-      clearProjectDraftThreadById(thread.projectId, thread.id);
-      clearTerminalState(threadId);
-      if (shouldNavigateToFallback) {
-        if (fallbackThreadId) {
-          void navigate({
-            to: "/$threadId",
-            params: { threadId: fallbackThreadId },
-            replace: true,
+        const fallbackThreadId = visibleThreads.find((entry) => entry.id !== threadId)?.id ?? null;
+        try {
+          await api.opencode.deleteSession({
+            ...openCodeConfig,
+            sessionId: threadId,
           });
-        } else {
-          void navigate({ to: "/", replace: true });
+          await refreshOpenCodeQueries();
+          if (routeThreadId === threadId) {
+            if (fallbackThreadId) {
+              await navigate({
+                to: "/$threadId",
+                params: { threadId: fallbackThreadId },
+                replace: true,
+              });
+            } else {
+              await navigate({ to: "/", replace: true });
+            }
+          }
+        } catch (error) {
+          toastManager.add({
+            type: "error",
+            title: "Failed to delete session",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          });
         }
-      }
-
-      if (!shouldDeleteWorktree || !orphanedWorktreePath || !threadProject) {
         return;
       }
-
+      if (clicked !== "copy-thread-id") {
+        return;
+      }
       try {
-        await removeWorktreeMutation.mutateAsync({
-          cwd: threadProject.cwd,
-          path: orphanedWorktreePath,
-          force: true,
+        await copyTextToClipboard(threadId);
+        toastManager.add({
+          type: "success",
+          title: "Session ID copied",
+          description: threadId,
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error removing worktree.";
-        console.error("Failed to remove orphaned worktree after thread deletion", {
-          threadId,
-          projectCwd: threadProject.cwd,
-          worktreePath: orphanedWorktreePath,
-          error,
-        });
         toastManager.add({
           type: "error",
-          title: "Thread deleted, but worktree removal failed",
-          description: `Could not remove ${displayWorktreePath ?? orphanedWorktreePath}. ${message}`,
+          title: "Failed to copy session ID",
+          description: error instanceof Error ? error.message : "An error occurred.",
         });
       }
     },
     [
       appSettings.confirmThreadDelete,
-      clearComposerDraftForThread,
-      clearProjectDraftThreadById,
-      clearTerminalState,
-      markThreadUnread,
       navigate,
-      projects,
-      removeWorktreeMutation,
+      openCodeConfig,
+      refreshOpenCodeQueries,
       routeThreadId,
-      threads,
-      isOpenCodeMode,
+      visibleThreads,
     ],
   );
 
   const handleProjectContextMenu = useCallback(
     async (projectId: ProjectId, position: { x: number; y: number }) => {
-      const api = readNativeApi();
-      if (!api) return;
-      if (isOpenCodeMode) {
-        return;
-      }
-      const clicked = await api.contextMenu.show(
-        [{ id: "delete", label: "Delete", destructive: true }],
-        position,
-      );
-      if (clicked !== "delete") return;
-
-      const project = projects.find((entry) => entry.id === projectId);
-      if (!project) return;
-
-      const projectThreads = threads.filter((thread) => thread.projectId === projectId);
-      if (projectThreads.length > 0) {
-        toastManager.add({
-          type: "warning",
-          title: "Project is not empty",
-          description: "Delete all threads in this project before deleting it.",
-        });
-        return;
-      }
-
-      const confirmed = await api.dialogs.confirm(
-        [`Delete project "${project.name}"?`, "This action cannot be undone."].join("\n"),
-      );
-      if (!confirmed) return;
-
-      try {
-        const projectDraftThread = getDraftThreadByProjectId(projectId);
-        if (projectDraftThread) {
-          clearComposerDraftForThread(projectDraftThread.threadId);
-        }
-        clearProjectDraftThreadId(projectId);
-        await api.orchestration.dispatchCommand({
-          type: "project.delete",
-          commandId: newCommandId(),
-          projectId,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error deleting project.";
-        console.error("Failed to remove project", { projectId, error });
-        toastManager.add({
-          type: "error",
-          title: `Failed to delete "${project.name}"`,
-          description: message,
-        });
-      }
+      void projectId;
+      void position;
     },
-    [
-      clearComposerDraftForThread,
-      clearProjectDraftThreadId,
-      getDraftThreadByProjectId,
-      projects,
-      threads,
-      isOpenCodeMode,
-    ],
+    [],
   );
 
   useEffect(() => {
-    if (!isOpenCodeMode || sortedVisibleProjects.length === 0) {
+    if (sortedVisibleProjects.length === 0) {
       return;
     }
     setOpenCodeExpandedProjectIds((current) => {
@@ -951,17 +723,15 @@ export default function Sidebar() {
       }
       return new Set(sortedVisibleProjects.map((project) => project.id));
     });
-  }, [isOpenCodeMode, sortedVisibleProjects]);
+  }, [sortedVisibleProjects]);
 
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       const activeThread = routeThreadId
         ? visibleThreads.find((thread) => thread.id === routeThreadId)
         : undefined;
-      const activeDraftThread = routeThreadId ? getDraftThread(routeThreadId) : null;
       if (isChatNewLocalShortcut(event, keybindings)) {
-        const projectId =
-          activeThread?.projectId ?? activeDraftThread?.projectId ?? sortedVisibleProjects[0]?.id;
+        const projectId = activeThread?.projectId ?? sortedVisibleProjects[0]?.id;
         if (!projectId) return;
         event.preventDefault();
         void handleNewThread(projectId);
@@ -969,15 +739,10 @@ export default function Sidebar() {
       }
 
       if (!isChatNewShortcut(event, keybindings)) return;
-      const projectId =
-        activeThread?.projectId ?? activeDraftThread?.projectId ?? sortedVisibleProjects[0]?.id;
+      const projectId = activeThread?.projectId ?? sortedVisibleProjects[0]?.id;
       if (!projectId) return;
       event.preventDefault();
-      void handleNewThread(projectId, {
-        branch: activeThread?.branch ?? activeDraftThread?.branch ?? null,
-        worktreePath: activeThread?.worktreePath ?? activeDraftThread?.worktreePath ?? null,
-        envMode: activeDraftThread?.envMode ?? (activeThread?.worktreePath ? "worktree" : "local"),
-      });
+      void handleNewThread(projectId);
     };
 
     window.addEventListener("keydown", onWindowKeyDown);
@@ -985,7 +750,6 @@ export default function Sidebar() {
       window.removeEventListener("keydown", onWindowKeyDown);
     };
   }, [
-    getDraftThread,
     handleNewThread,
     keybindings,
     routeThreadId,
@@ -1189,9 +953,7 @@ export default function Sidebar() {
                   if (byDate !== 0) return byDate;
                   return b.id.localeCompare(a.id);
                 });
-              const projectExpanded = isOpenCodeMode
-                ? openCodeExpandedProjectIds.has(project.id)
-                : project.expanded;
+              const projectExpanded = openCodeExpandedProjectIds.has(project.id);
               const isThreadListExpanded = expandedThreadListsByProject.has(project.id);
               const hasHiddenThreads = projectThreads.length > THREAD_PREVIEW_LIMIT;
               const visibleProjectThreads =
@@ -1205,20 +967,15 @@ export default function Sidebar() {
                   className="group/collapsible"
                   open={projectExpanded}
                   onOpenChange={(open) => {
-                    if (isOpenCodeMode) {
-                      setOpenCodeExpandedProjectIds((current) => {
-                        const next = new Set(current);
-                        if (open) {
-                          next.add(project.id);
-                        } else {
-                          next.delete(project.id);
-                        }
-                        return next;
-                      });
-                      return;
-                    }
-                    if (open === project.expanded) return;
-                    toggleProject(project.id);
+                    setOpenCodeExpandedProjectIds((current) => {
+                      const next = new Set(current);
+                      if (open) {
+                        next.add(project.id);
+                      } else {
+                        next.delete(project.id);
+                      }
+                      return next;
+                    });
                   }}
                 >
                   <SidebarMenuItem>
@@ -1359,34 +1116,37 @@ export default function Sidebar() {
                                   )}
                                   {renamingThreadId === thread.id ? (
                                     <input
-                                      ref={(el) => {
-                                        if (el && renamingInputRef.current !== el) {
-                                          renamingInputRef.current = el;
-                                          el.focus();
-                                          el.select();
+                                      ref={(element) => {
+                                        if (element && renamingInputRef.current !== element) {
+                                          renamingInputRef.current = element;
+                                          element.focus();
+                                          element.select();
                                         }
                                       }}
-                                      className="min-w-0 flex-1 truncate text-xs bg-transparent outline-none border border-ring rounded px-0.5"
+                                      className="min-w-0 flex-1 truncate rounded border border-ring bg-transparent px-0.5 text-xs outline-none"
                                       value={renamingTitle}
-                                      onChange={(e) => setRenamingTitle(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        e.stopPropagation();
-                                        if (e.key === "Enter") {
-                                          e.preventDefault();
+                                      onChange={(event) => setRenamingTitle(event.target.value)}
+                                      onKeyDown={(event) => {
+                                        event.stopPropagation();
+                                        if (event.key === "Enter") {
+                                          event.preventDefault();
                                           renamingCommittedRef.current = true;
                                           void commitRename(thread.id, renamingTitle, thread.title);
-                                        } else if (e.key === "Escape") {
-                                          e.preventDefault();
-                                          renamingCommittedRef.current = true;
-                                          cancelRename();
+                                          return;
                                         }
+                                        if (event.key !== "Escape") {
+                                          return;
+                                        }
+                                        event.preventDefault();
+                                        renamingCommittedRef.current = true;
+                                        cancelRename();
                                       }}
                                       onBlur={() => {
                                         if (!renamingCommittedRef.current) {
                                           void commitRename(thread.id, renamingTitle, thread.title);
                                         }
                                       }}
-                                      onClick={(e) => e.stopPropagation()}
+                                      onClick={(event) => event.stopPropagation()}
                                     />
                                   ) : (
                                     <span className="min-w-0 flex-1 truncate text-xs">
@@ -1458,11 +1218,11 @@ export default function Sidebar() {
 
             {sortedVisibleProjects.length === 0 && !addingProject && (
              <div className="px-2 pt-4 text-center text-xs text-muted-foreground/60">
-               {isOpenCodeMode ? "No OpenCode projects yet." : "No projects yet."}
-               <br />
-               {isOpenCodeMode ? "Create a session in a folder to get started." : "Add one to get started."}
-             </div>
-           )}
+                No OpenCode projects yet.
+                <br />
+                Create a session in a folder to get started.
+              </div>
+            )}
         </SidebarGroup>
       </SidebarContent>
 
@@ -1470,15 +1230,15 @@ export default function Sidebar() {
       <SidebarFooter className="gap-0 p-3">
         {addingProject ? (
           <>
-            <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
-              {isOpenCodeMode ? "New OpenCode session" : "Add project"}
-            </p>
-            <input
-              className="mb-2 w-full rounded-md border border-border bg-secondary px-2 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none"
-              placeholder={isOpenCodeMode ? "/path/to/session-directory" : "/path/to/project"}
-              value={newCwd}
-              onChange={(event) => setNewCwd(event.target.value)}
-              onKeyDown={(event) => {
+              <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                New OpenCode session
+              </p>
+              <input
+                className="mb-2 w-full rounded-md border border-border bg-secondary px-2 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-ring focus:outline-none"
+                placeholder="/path/to/session-directory"
+                value={newCwd}
+                onChange={(event) => setNewCwd(event.target.value)}
+                onKeyDown={(event) => {
                 if (event.key === "Enter") handleAddProject();
                 if (event.key === "Escape") setAddingProject(false);
               }}
@@ -1500,8 +1260,8 @@ export default function Sidebar() {
                 onClick={handleAddProject}
                 disabled={isAddingProject}
               >
-                 {isAddingProject ? (isOpenCodeMode ? "Creating..." : "Adding...") : isOpenCodeMode ? "Create" : "Add"}
-               </button>
+                 {isAddingProject ? "Creating..." : "Create"}
+                </button>
               <button
                 type="button"
                 className="flex-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground/80 transition-colors duration-150 hover:bg-secondary"
@@ -1512,13 +1272,13 @@ export default function Sidebar() {
             </div>
           </>
         ) : (
-          <button
-            type="button"
-            className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-2 text-xs text-muted-foreground/70 transition-colors duration-150 hover:border-ring hover:text-muted-foreground"
-            onClick={() => setAddingProject(true)}
-          >
-             {isOpenCodeMode ? "+ New session" : "+ Add project"}
-           </button>
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-2 text-xs text-muted-foreground/70 transition-colors duration-150 hover:border-ring hover:text-muted-foreground"
+              onClick={() => setAddingProject(true)}
+            >
+              + New session
+            </button>
          )}
       </SidebarFooter>
     </>

@@ -3,11 +3,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, type ReactNode, useCallback, useEffect } from "react";
 
 import ChatView from "../components/ChatView";
-import { useComposerDraftStore } from "../composerDraftStore";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useOpenCodeMode, useOpenCodeThreadSource } from "../opencode/hooks";
-import { useStore } from "../store";
+import { useOpenCodeThreadSource } from "../opencode/hooks";
 import { Sheet, SheetPopup } from "../components/ui/sheet";
 import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
 
@@ -134,22 +132,16 @@ const DiffPanelInlineSidebar = (props: {
 };
 
 function ChatThreadRouteView() {
-  const isOpenCodeMode = useOpenCodeMode();
-  const threadsHydrated = useStore((store) => store.threadsHydrated);
   const navigate = useNavigate();
   const threadId = Route.useParams({
     select: (params) => ThreadId.makeUnsafe(params.threadId),
   });
   const openCodeState = useOpenCodeThreadSource(threadId);
   const search = Route.useSearch();
-  const threadExists = useStore((store) => store.threads.some((thread) => thread.id === threadId));
-  const draftThreadExists = useComposerDraftStore(
-    (store) => Object.hasOwn(store.draftThreadsByThreadId, threadId),
-  );
-  const routeThreadExists = isOpenCodeMode
-    ? openCodeState.threads.some((thread) => thread.id === threadId)
-    : threadExists || draftThreadExists;
-  const threadDataHydrated = isOpenCodeMode ? openCodeState.threadsHydrated : threadsHydrated;
+  const routeThreadExists = openCodeState.threads.some((thread) => thread.id === threadId);
+  const threadDataHydrated = openCodeState.threadsHydrated;
+  const activeThread = openCodeState.activeThread ?? openCodeState.threads.find((thread) => thread.id === threadId);
+  const threadSupportsDiff = activeThread?.capabilities.diff === true;
   const diffOpen = search.diff === "1";
   const shouldUseDiffSheet = useMediaQuery(DIFF_INLINE_LAYOUT_MEDIA_QUERY);
   const closeDiff = useCallback(() => {
@@ -187,7 +179,7 @@ function ChatThreadRouteView() {
     return null;
   }
 
-  if (isOpenCodeMode) {
+  if (!threadSupportsDiff) {
     return (
       <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
         <ChatView key={threadId} threadId={threadId} />
