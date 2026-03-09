@@ -154,7 +154,7 @@ function toLegacySessionStatus(
 }
 
 function toLegacyProvider(providerName: string | null): ProviderKind {
-  if (providerName === "codex") {
+  if (providerName && providerName.trim().length > 0) {
     return providerName;
   }
   return "codex";
@@ -166,7 +166,7 @@ function inferProviderForThreadModel(input: {
   readonly model: string;
   readonly sessionProviderName: string | null;
 }): ProviderKind {
-  if (input.sessionProviderName === "codex") {
+  if (input.sessionProviderName && input.sessionProviderName.trim().length > 0) {
     return input.sessionProviderName;
   }
   const normalizedCodex = normalizeModelSlug(input.model, "codex");

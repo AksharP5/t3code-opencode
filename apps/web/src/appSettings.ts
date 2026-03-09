@@ -31,9 +31,9 @@ export const APP_SERVICE_TIER_OPTIONS = [
 export type AppServiceTier = (typeof APP_SERVICE_TIER_OPTIONS)[number]["value"];
 const AppServiceTierSchema = Schema.Literals(["auto", "fast", "flex"]);
 const MODELS_WITH_FAST_SUPPORT = new Set(["gpt-5.4"]);
-const BUILT_IN_MODEL_SLUGS_BY_PROVIDER: Record<ProviderKind, ReadonlySet<string>> = {
+const BUILT_IN_MODEL_SLUGS_BY_PROVIDER = {
   codex: new Set(getModelOptions("codex").map((option) => option.slug)),
-};
+} as const;
 
 const AppSettingsSchema = Schema.Struct({
   codexBinaryPath: Schema.String.check(Schema.isMaxLength(4096)).pipe(
@@ -93,7 +93,8 @@ export function normalizeCustomModelSlugs(
 ): string[] {
   const normalizedModels: string[] = [];
   const seen = new Set<string>();
-  const builtInModelSlugs = BUILT_IN_MODEL_SLUGS_BY_PROVIDER[provider];
+  const builtInModelSlugs =
+    provider === "codex" ? BUILT_IN_MODEL_SLUGS_BY_PROVIDER.codex : new Set<string>();
 
   for (const candidate of models) {
     const normalized = normalizeModelSlug(candidate, provider);

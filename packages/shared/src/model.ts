@@ -10,16 +10,20 @@ import {
 
 type CatalogProvider = keyof typeof MODEL_OPTIONS_BY_PROVIDER;
 
+function resolveCatalogProvider(provider: ProviderKind): CatalogProvider {
+  return provider === "codex" ? provider : "codex";
+}
+
 const MODEL_SLUG_SET_BY_PROVIDER: Record<CatalogProvider, ReadonlySet<ModelSlug>> = {
   codex: new Set(MODEL_OPTIONS_BY_PROVIDER.codex.map((option) => option.slug)),
 };
 
 export function getModelOptions(provider: ProviderKind = "codex") {
-  return MODEL_OPTIONS_BY_PROVIDER[provider];
+  return MODEL_OPTIONS_BY_PROVIDER[resolveCatalogProvider(provider)];
 }
 
 export function getDefaultModel(provider: ProviderKind = "codex"): ModelSlug {
-  return DEFAULT_MODEL_BY_PROVIDER[provider];
+  return DEFAULT_MODEL_BY_PROVIDER[resolveCatalogProvider(provider)];
 }
 
 export function normalizeModelSlug(
@@ -35,7 +39,10 @@ export function normalizeModelSlug(
     return null;
   }
 
-  const aliases = MODEL_SLUG_ALIASES_BY_PROVIDER[provider] as Record<string, ModelSlug>;
+  const aliases = MODEL_SLUG_ALIASES_BY_PROVIDER[resolveCatalogProvider(provider)] as Record<
+    string,
+    ModelSlug
+  >;
   const aliased = aliases[trimmed];
   return typeof aliased === "string" ? aliased : (trimmed as ModelSlug);
 }
@@ -49,7 +56,7 @@ export function resolveModelSlug(
     return getDefaultModel(provider);
   }
 
-  return MODEL_SLUG_SET_BY_PROVIDER[provider].has(normalized)
+  return MODEL_SLUG_SET_BY_PROVIDER[resolveCatalogProvider(provider)].has(normalized)
     ? normalized
     : getDefaultModel(provider);
 }
