@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ThreadId } from "@t3tools/contracts";
 import { buildOpenCodeServerConfigInput, useAppSettings } from "../appSettings";
-import type { Project, Thread } from "../types";
+import type { Project, Thread, TurnDiffSummary } from "../types";
 import { useOpenCodeEventActivityStore } from "./eventActivityStore";
 import {
   buildOpenCodeAgentCatalog,
@@ -178,6 +178,32 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     vcsQuery.data,
   ]);
 
+  const activeThreadWithDiff = useMemo(() => {
+    const activeDiff = diffQuery.data ?? [];
+    if (!activeThread || activeDiff.length === 0 || !activeThread.latestTurn?.turnId) {
+      return activeThread;
+    }
+
+    const completedAt =
+      activeThread.latestTurn.completedAt ?? activeThread.latestTurn.startedAt ?? activeThread.createdAt;
+    const summary: TurnDiffSummary = {
+      turnId: activeThread.latestTurn.turnId,
+      completedAt,
+      assistantMessageId: activeThread.latestTurn.assistantMessageId ?? undefined,
+      files: activeDiff.map((file) => ({
+        path: file.file,
+        kind: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+      })),
+    };
+
+    return {
+      ...activeThread,
+      turnDiffSummaries: [summary],
+    } satisfies Thread;
+  }, [activeThread, diffQuery.data]);
+
   return {
     config,
     status: statusQuery.data ?? null,
@@ -189,7 +215,7 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     activeDiff: diffQuery.data ?? [],
     projects,
     threads,
-    activeThread,
+    activeThread: activeThreadWithDiff,
     threadsHydrated:
       statusQuery.status === "success" &&
       projectsQuery.status !== "pending" &&
