@@ -312,7 +312,11 @@ export async function forkOpenCodeSession(
   input: OpenCodeForkSessionInput,
   config: ResolvedOpenCodeConfig,
 ): Promise<OpenCodeSession> {
-  const body = input.messageId !== undefined ? { messageID: input.messageId } : {};
+  const body = {
+    ...(input.messageId !== undefined ? { messageID: input.messageId } : {}),
+    ...(input.directory !== undefined ? { directory: input.directory } : {}),
+    ...(input.permission !== undefined ? { permission: input.permission } : {}),
+  };
   const response = await fetch(
     `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/fork`,
     {

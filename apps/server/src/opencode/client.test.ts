@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createOpenCodeSession,
   fetchOpenCodeHealth,
+  forkOpenCodeSession,
   getOpenCodeVcs,
   replyOpenCodePermission,
   sendOpenCodeMessage,
@@ -172,6 +173,37 @@ describe("opencode client", () => {
     const call = fetchMock.mock.calls[0];
     expect(call?.[1]?.body).toBe(
       JSON.stringify({ permission: [{ permission: "*", pattern: "*", action: "allow" }] }),
+    );
+  });
+
+  it("forks sessions into a requested directory", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "session-2",
+        directory: "/tmp/project-a/.branches/feature-opencode",
+        title: "Forked session",
+        time: { created: 1, updated: 1 },
+      }),
+    } as Response);
+
+    await forkOpenCodeSession(
+      {
+        ...config,
+        sessionId: "session-1",
+        directory: "/tmp/project-a/.branches/feature-opencode",
+        permission: [{ permission: "*", pattern: "*", action: "allow" }],
+      },
+      config,
+    );
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/fork");
+    expect(call?.[1]?.body).toBe(
+      JSON.stringify({
+        directory: "/tmp/project-a/.branches/feature-opencode",
+        permission: [{ permission: "*", pattern: "*", action: "allow" }],
+      }),
     );
   });
 

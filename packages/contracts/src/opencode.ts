@@ -441,5 +441,7 @@ export const OpenCodeForkSessionInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,
   sessionId: OpenCodeIdentifier,
   messageId: Schema.optional(OpenCodeIdentifier),
+  directory: Schema.optional(TrimmedNonEmptyString),
+  permission: Schema.optional(OpenCodePermissionRuleset),
 });
 export type OpenCodeForkSessionInput = typeof OpenCodeForkSessionInput.Type;

@@ -121,6 +121,7 @@ import {
   type TurnDiffTreeNode,
 } from "../lib/turnDiffTree";
 import BranchToolbar from "./BranchToolbar";
+import { BranchToolbarBranchSelector } from "./BranchToolbarBranchSelector";
 import GitActionsControl from "./GitActionsControl";
 import {
   isOpenFavoriteEditorShortcut,
@@ -712,6 +713,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
   );
   const clearComposerDraftContent = useComposerDraftStore((store) => store.clearComposerContent);
   const clearDraftThread = useComposerDraftStore((store) => store.clearDraftThread);
+  const getDraftThreadByProjectId = useComposerDraftStore((store) => store.getDraftThreadByProjectId);
+  const setProjectDraftThreadId = useComposerDraftStore((store) => store.setProjectDraftThreadId);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const draftThread = useComposerDraftStore(
     (store) => store.draftThreadsByThreadId[threadId] ?? null,
@@ -2796,11 +2799,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
             targetDirectory = result.worktree.path;
           }
 
-          const session = await api.opencode.createSession({
-            ...openCodeConfig,
-            directory: targetDirectory,
-            permission: [...openCodeRuntimeModeToPermissions(runtimeMode)],
-          });
+          const session = draftThread?.forkSessionId
+            ? await api.opencode.forkSession({
+                ...openCodeConfig,
+                sessionId: draftThread.forkSessionId,
+                directory: targetDirectory,
+                permission: [...openCodeRuntimeModeToPermissions(runtimeMode)],
+              })
+            : await api.opencode.createSession({
+                ...openCodeConfig,
+                directory: targetDirectory,
+                permission: [...openCodeRuntimeModeToPermissions(runtimeMode)],
+              });
           targetThreadId = ThreadId.makeUnsafe(session.id);
           targetSessionId = session.id;
           clearDraftThread(threadIdForSend);
@@ -3581,6 +3591,51 @@ export default function ChatView({ threadId }: ChatViewProps) {
       scheduleComposerFocus();
     },
     [isLocalDraftThread, scheduleComposerFocus, setDraftThreadContext, threadId],
+  );
+
+  const onOpenCodeBranchSelection = useCallback(
+    async (branch: string | null, worktreePath: string | null) => {
+      if (!activeProject || !activeThread) {
+        return;
+      }
+
+      const existingDraft = getDraftThreadByProjectId(activeProject.id);
+      const nextThreadId = existingDraft?.threadId ?? newThreadId();
+      const forkSessionId =
+        activeThread.session !== null
+          ? activeThread.id
+          : ((draftThread?.forkSessionId ?? existingDraft?.forkSessionId) ?? null);
+
+      setProjectDraftThreadId(activeProject.id, nextThreadId, {
+        branch,
+        worktreePath,
+        envMode: "worktree",
+        runtimeMode,
+        interactionMode,
+        forkSessionId,
+      });
+
+      if (threadId !== nextThreadId) {
+        await navigate({
+          to: "/$threadId",
+          params: { threadId: nextThreadId },
+        });
+      }
+
+      scheduleComposerFocus();
+    },
+    [
+      activeProject,
+      activeThread,
+      draftThread?.forkSessionId,
+      getDraftThreadByProjectId,
+      interactionMode,
+      navigate,
+      runtimeMode,
+      scheduleComposerFocus,
+      setProjectDraftThreadId,
+      threadId,
+    ],
   );
 
   const applyPromptReplacement = useCallback(
@@ -4450,7 +4505,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
         ) : null}
       </div>{/* end horizontal flex container */}
 
-      {isGitRepo && threadCapabilities.branchSelection && (
+      {isGitRepo && isOpenCodeThread ? (
+        <OpenCodeBranchToolbar
+          activeProjectCwd={activeProject?.cwd ?? null}
+          activeThreadBranch={activeThread.branch}
+          onSetThreadBranch={(branch, worktreePath) => {
+            void onOpenCodeBranchSelection(branch, worktreePath);
+          }}
+          onComposerFocusRequest={scheduleComposerFocus}
+        />
+      ) : null}
+
+      {isGitRepo && !isOpenCodeThread && threadCapabilities.branchSelection && (
         <BranchToolbar
           threadId={activeThread.id}
           onEnvModeChange={onEnvModeChange}
@@ -6015,6 +6081,38 @@ function buildOpenCodeModelCatalog(
     lookup,
   };
 }
+
+const OpenCodeBranchToolbar = memo(function OpenCodeBranchToolbar(props: {
+  activeProjectCwd: string | null;
+  activeThreadBranch: string | null;
+  onSetThreadBranch: (branch: string | null, worktreePath: string | null) => void;
+  onComposerFocusRequest?: () => void;
+}) {
+  if (!props.activeProjectCwd) {
+    return null;
+  }
+
+  return (
+    <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 pb-3 pt-1">
+      <div className="flex items-center gap-2">
+        <span className="border border-transparent px-[calc(--spacing(2)-1px)] text-sm font-medium text-muted-foreground/70 sm:text-xs">
+          Fork worktree
+        </span>
+      </div>
+
+      <BranchToolbarBranchSelector
+        activeProjectCwd={props.activeProjectCwd}
+        activeThreadBranch={props.activeThreadBranch}
+        activeWorktreePath={null}
+        branchCwd={props.activeProjectCwd}
+        effectiveEnvMode="worktree"
+        envLocked={false}
+        onSetThreadBranch={props.onSetThreadBranch}
+        {...(props.onComposerFocusRequest ? { onComposerFocusRequest: props.onComposerFocusRequest } : {})}
+      />
+    </div>
+  );
+});
 
 const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   codex: OpenAI,
