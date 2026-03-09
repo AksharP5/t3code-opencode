@@ -1,5 +1,6 @@
 import type {
   OrchestrationLatestTurn,
+  OpenCodeMessagePart,
   OrchestrationProposedPlanId,
   OrchestrationSessionStatus,
   OrchestrationThreadActivity,
@@ -43,6 +44,7 @@ export interface ChatMessage {
   id: MessageId;
   role: "user" | "assistant" | "system";
   text: string;
+  structuredParts?: ReadonlyArray<OpenCodeMessagePart> | undefined;
   attachments?: ChatAttachment[];
   createdAt: string;
   completedAt?: string | undefined;

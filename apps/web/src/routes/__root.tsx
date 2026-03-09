@@ -1,4 +1,4 @@
-import { ThreadId } from "@t3tools/contracts";
+import { ThreadId, type OpenCodeEvent } from "@t3tools/contracts";
 import {
   Outlet,
   createRootRouteWithContext,
@@ -34,6 +34,95 @@ export const Route = createRootRouteWithContext<{
     meta: [{ name: "title", content: APP_DISPLAY_NAME }],
   }),
 });
+
+function getOpenCodeEventSessionId(event: OpenCodeEvent): string | null {
+  const properties = event.payload.properties;
+  if (!properties || typeof properties !== "object") {
+    return null;
+  }
+
+  const record = properties as Record<string, unknown>;
+  if (typeof record.sessionID === "string") {
+    return record.sessionID;
+  }
+
+  const info = record.info;
+  if (info && typeof info === "object" && typeof (info as Record<string, unknown>).sessionID === "string") {
+    const sessionId = (info as Record<string, unknown>).sessionID;
+    return typeof sessionId === "string" ? sessionId : null;
+  }
+
+  const part = record.part;
+  if (part && typeof part === "object" && typeof (part as Record<string, unknown>).sessionID === "string") {
+    const sessionId = (part as Record<string, unknown>).sessionID;
+    return typeof sessionId === "string" ? sessionId : null;
+  }
+
+  return null;
+}
+
+function invalidateOpenCodeSessionQueries(queryClient: QueryClient, sessionId: string): Promise<void> {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: ["opencode", "session"],
+      predicate: (query) => {
+        const input = query.queryKey[2];
+        return !!input && typeof input === "object" && (input as { sessionId?: string }).sessionId === sessionId;
+      },
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ["opencode", "messages"],
+      predicate: (query) => {
+        const input = query.queryKey[2];
+        return !!input && typeof input === "object" && (input as { sessionId?: string }).sessionId === sessionId;
+      },
+    }),
+  ]).then(() => undefined);
+}
+
+function invalidateOpenCodeQueriesForEvent(queryClient: QueryClient, event: OpenCodeEvent): Promise<void> {
+  const type = event.payload.type;
+  if (type === "server.connected" || type === "server.heartbeat") {
+    return Promise.resolve();
+  }
+
+  const tasks: Promise<unknown>[] = [];
+  const sessionId = getOpenCodeEventSessionId(event);
+  if (sessionId) {
+    tasks.push(invalidateOpenCodeSessionQueries(queryClient, sessionId));
+  }
+
+  if (type.startsWith("message.")) {
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "messages"] }));
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "statuses"] }));
+  }
+
+  if (type.startsWith("session.")) {
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "sessions"] }));
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "statuses"] }));
+  }
+
+  if (type.startsWith("permission.")) {
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "permissions"] }));
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "session"] }));
+  }
+
+  if (type.startsWith("vcs.")) {
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "vcs"] }));
+  }
+
+  if (type.startsWith("worktree.") || type.startsWith("project.")) {
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "projects"] }));
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "sessions"] }));
+    tasks.push(queryClient.invalidateQueries({ queryKey: ["opencode", "vcs"] }));
+  }
+
+  if (tasks.length === 0) {
+    tasks.push(queryClient.invalidateQueries({ queryKey: opencodeQueryKeys.all }));
+  }
+
+  return Promise.all(tasks).then(() => undefined);
+}
 
 function RootRouteView() {
   if (!readNativeApi()) {
@@ -213,10 +302,8 @@ function EventRouter() {
           hasRunningSubprocess,
         );
     });
-    const unsubOpenCodeEvent = api.opencode.onEvent(() => {
-      void queryClient.invalidateQueries({
-        queryKey: opencodeQueryKeys.all,
-      });
+    const unsubOpenCodeEvent = api.opencode.onEvent((event) => {
+      void invalidateOpenCodeQueriesForEvent(queryClient, event);
     });
     const unsubWelcome = onServerWelcome((payload) => {
       void (async () => {

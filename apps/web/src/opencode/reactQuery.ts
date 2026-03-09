@@ -1,6 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 import type {
+  OpenCodeGetVcsInput,
   OpenCodeGetSessionInput,
+  OpenCodeListAgentsInput,
+  OpenCodeListPermissionsInput,
+  OpenCodeListProvidersInput,
   OpenCodeListProjectsInput,
   OpenCodeListSessionsInput,
 } from "@t3tools/contracts";
@@ -9,11 +13,15 @@ import { ensureNativeApi } from "../nativeApi";
 export const opencodeQueryKeys = {
   all: ["opencode"] as const,
   status: (input: OpenCodeListProjectsInput) => ["opencode", "status", input] as const,
+  providers: (input: OpenCodeListProvidersInput) => ["opencode", "providers", input] as const,
+  agents: (input: OpenCodeListAgentsInput) => ["opencode", "agents", input] as const,
   projects: (input: OpenCodeListProjectsInput) => ["opencode", "projects", input] as const,
   sessions: (input: OpenCodeListSessionsInput) => ["opencode", "sessions", input] as const,
   session: (input: OpenCodeGetSessionInput) => ["opencode", "session", input] as const,
   messages: (input: OpenCodeGetSessionInput) => ["opencode", "messages", input] as const,
   statuses: (input: OpenCodeListProjectsInput) => ["opencode", "statuses", input] as const,
+  permissions: (input: OpenCodeListPermissionsInput) => ["opencode", "permissions", input] as const,
+  vcs: (input: OpenCodeGetVcsInput) => ["opencode", "vcs", input] as const,
 };
 
 export function opencodeStatusQueryOptions(input: OpenCodeListProjectsInput) {
@@ -30,6 +38,24 @@ export function opencodeProjectsQueryOptions(input: OpenCodeListProjectsInput) {
   return queryOptions({
     queryKey: opencodeQueryKeys.projects(input),
     queryFn: async () => ensureNativeApi().opencode.listProjects(input),
+    staleTime: 30_000,
+    refetchOnReconnect: true,
+  });
+}
+
+export function opencodeAgentsQueryOptions(input: OpenCodeListAgentsInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.agents(input),
+    queryFn: async () => ensureNativeApi().opencode.listAgents(input),
+    staleTime: 30_000,
+    refetchOnReconnect: true,
+  });
+}
+
+export function opencodeProvidersQueryOptions(input: OpenCodeListProvidersInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.providers(input),
+    queryFn: async () => ensureNativeApi().opencode.listProviders(input),
     staleTime: 30_000,
     refetchOnReconnect: true,
   });
@@ -69,5 +95,24 @@ export function opencodeStatusesQueryOptions(input: OpenCodeListProjectsInput) {
     staleTime: 2_000,
     refetchOnReconnect: true,
     refetchInterval: 2_000,
+  });
+}
+
+export function opencodePermissionsQueryOptions(input: OpenCodeListPermissionsInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.permissions(input),
+    queryFn: async () => ensureNativeApi().opencode.listPermissions(input),
+    staleTime: 0,
+    refetchOnReconnect: true,
+    refetchInterval: 2_000,
+  });
+}
+
+export function opencodeVcsQueryOptions(input: OpenCodeGetVcsInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.vcs(input),
+    queryFn: async () => ensureNativeApi().opencode.getVcs(input),
+    staleTime: 5_000,
+    refetchOnReconnect: true,
   });
 }

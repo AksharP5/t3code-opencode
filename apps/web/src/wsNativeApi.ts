@@ -190,14 +190,22 @@ export function createWsNativeApi(): NativeApi {
     opencode: {
       getStatus: (input) => transport.request(WS_METHODS.opencodeGetStatus, input),
       ensureServer: (input) => transport.request(WS_METHODS.opencodeEnsureServer, input),
+      listProviders: (input) => transport.request(WS_METHODS.opencodeListProviders, input),
+      listAgents: (input) => transport.request(WS_METHODS.opencodeListAgents, input),
       listProjects: (input) => transport.request(WS_METHODS.opencodeListProjects, input),
       listSessions: (input) => transport.request(WS_METHODS.opencodeListSessions, input),
       getSession: (input) => transport.request(WS_METHODS.opencodeGetSession, input),
       getMessages: (input) => transport.request(WS_METHODS.opencodeGetMessages, input),
       getStatuses: (input) => transport.request(WS_METHODS.opencodeGetStatuses, input),
+      listPermissions: (input) => transport.request(WS_METHODS.opencodeListPermissions, input),
+      replyPermission: (input) => transport.request(WS_METHODS.opencodeReplyPermission, input),
+      getVcs: (input) => transport.request(WS_METHODS.opencodeGetVcs, input),
       createSession: (input) => transport.request(WS_METHODS.opencodeCreateSession, input),
       sendMessage: (input) => transport.request(WS_METHODS.opencodeSendMessage, input),
       abortSession: (input) => transport.request(WS_METHODS.opencodeAbortSession, input),
+      updateSession: (input) => transport.request(WS_METHODS.opencodeUpdateSession, input),
+      deleteSession: (input) => transport.request(WS_METHODS.opencodeDeleteSession, input),
+      forkSession: (input) => transport.request(WS_METHODS.opencodeForkSession, input),
       onEvent: (callback) =>
         transport.subscribe(WS_CHANNELS.opencodeEvent, (data) => {
           const payload = decodeAndWarnOnFailure(OpenCodeEvent, data);
