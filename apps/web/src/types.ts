@@ -125,6 +125,16 @@ export interface ThreadSession {
   provider: ProviderKind;
   status: SessionPhase | "error" | "closed";
   activeTurnId?: TurnId | undefined;
+  shareUrl?: string | null | undefined;
+  revert?:
+    | {
+        messageId: string;
+        partId?: string | undefined;
+        snapshot?: string | undefined;
+        diff?: string | undefined;
+      }
+    | null
+    | undefined;
   createdAt: string;
   updatedAt: string;
   lastError?: string;

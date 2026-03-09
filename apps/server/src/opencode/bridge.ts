@@ -20,7 +20,10 @@ import type {
   OpenCodeRejectQuestionInput,
   OpenCodeRevertSessionInput,
   OpenCodeSendMessageInput,
+  OpenCodeShareSessionInput,
   OpenCodeStatus,
+  OpenCodeUnrevertSessionInput,
+  OpenCodeUnshareSessionInput,
   OpenCodeUpdateSessionInput,
 } from "@t3tools/contracts";
 import {
@@ -46,7 +49,10 @@ import {
   rejectOpenCodeQuestion,
   revertOpenCodeSession,
   sendOpenCodeMessage,
+  shareOpenCodeSession,
   streamOpenCodeEvents,
+  unrevertOpenCodeSession,
+  unshareOpenCodeSession,
   updateOpenCodeSession,
 } from "./client";
 import { isLoopbackOpenCodeUrl, resolveOpenCodeConfig, type ResolvedOpenCodeConfig } from "./config";
@@ -195,6 +201,21 @@ export class OpenCodeBridge {
   async revertSession(input: OpenCodeRevertSessionInput) {
     const config = await this.ensureReady(input);
     return revertOpenCodeSession(input, config);
+  }
+
+  async shareSession(input: OpenCodeShareSessionInput) {
+    const config = await this.ensureReady(input);
+    return shareOpenCodeSession(input, config);
+  }
+
+  async unshareSession(input: OpenCodeUnshareSessionInput) {
+    const config = await this.ensureReady(input);
+    return unshareOpenCodeSession(input, config);
+  }
+
+  async unrevertSession(input: OpenCodeUnrevertSessionInput) {
+    const config = await this.ensureReady(input);
+    return unrevertOpenCodeSession(input, config);
   }
 
   async getVcs(input: OpenCodeGetVcsInput) {

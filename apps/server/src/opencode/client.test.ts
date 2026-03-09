@@ -11,6 +11,9 @@ import {
   replyOpenCodeQuestion,
   revertOpenCodeSession,
   sendOpenCodeMessage,
+  shareOpenCodeSession,
+  unshareOpenCodeSession,
+  unrevertOpenCodeSession,
   updateOpenCodeSession,
 } from "./client";
 
@@ -377,6 +380,61 @@ describe("opencode client", () => {
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/revert");
     expect(call?.[1]?.body).toBe(JSON.stringify({ messageID: "message-1" }));
+  });
+
+  it("shares OpenCode sessions", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "session-1",
+        directory: "/tmp/project-a",
+        title: "Build feature",
+        share: { url: "https://share.example/session-1" },
+        time: { created: 1, updated: 2 },
+      }),
+    } as Response);
+
+    await shareOpenCodeSession({ ...config, sessionId: "session-1" }, config);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/share");
+    expect(call?.[1]?.method).toBe("POST");
+  });
+
+  it("unshares OpenCode sessions", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "session-1",
+        directory: "/tmp/project-a",
+        title: "Build feature",
+        time: { created: 1, updated: 2 },
+      }),
+    } as Response);
+
+    await unshareOpenCodeSession({ ...config, sessionId: "session-1" }, config);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/share");
+    expect(call?.[1]?.method).toBe("DELETE");
+  });
+
+  it("restores reverted OpenCode sessions", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "session-1",
+        directory: "/tmp/project-a",
+        title: "Build feature",
+        time: { created: 1, updated: 2 },
+      }),
+    } as Response);
+
+    await unrevertOpenCodeSession({ ...config, sessionId: "session-1" }, config);
+
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/unrevert");
+    expect(call?.[1]?.method).toBe("POST");
   });
 
   it("loads VCS info for the requested directory", async () => {

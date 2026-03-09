@@ -4142,6 +4142,27 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       {/* Error banner */}
       <ProviderHealthBanner status={activeProviderStatus} />
+      {isOpenCodeThread && activeThread.session?.revert ? (
+        <OpenCodeRevertBanner
+          onRestore={() => {
+            const api = readNativeApi();
+            if (!api) {
+              return;
+            }
+            void api.opencode
+              .unrevertSession({
+                ...openCodeConfig,
+                sessionId: activeThread.id,
+              })
+              .catch((err: unknown) => {
+                setThreadError(
+                  activeThread.id,
+                  err instanceof Error ? err.message : "Failed to restore reverted session.",
+                );
+              });
+          }}
+        />
+      ) : null}
       <ThreadErrorBanner
         error={displayedThreadError}
         onDismiss={() => setThreadError(activeThread.id, null)}
@@ -6449,6 +6470,26 @@ const OpenCodeDiffDock = memo(function OpenCodeDiffDock(props: {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+});
+
+const OpenCodeRevertBanner = memo(function OpenCodeRevertBanner(props: {
+  onRestore: () => void;
+}) {
+  return (
+    <div className="mx-auto mt-3 w-full max-w-3xl px-3 sm:px-5">
+      <div className="flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/8 px-4 py-3">
+        <div>
+          <p className="text-sm font-medium text-foreground">Session is showing reverted state</p>
+          <p className="text-xs text-muted-foreground">
+            Restore the canonical OpenCode session to bring back reverted messages.
+          </p>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={props.onRestore}>
+          Restore
+        </Button>
+      </div>
     </div>
   );
 });

@@ -122,6 +122,15 @@ export function mapOpenCodeThreadSummary(input: {
       provider,
       status: openCodeStatusToThreadPhase(input.status),
       orchestrationStatus: input.status?.type === "busy" ? "running" : "ready",
+      shareUrl: input.session.share?.url ?? null,
+      revert: input.session.revert
+        ? {
+            messageId: input.session.revert.messageID,
+            ...(input.session.revert.partID ? { partId: input.session.revert.partID } : {}),
+            ...(input.session.revert.snapshot ? { snapshot: input.session.revert.snapshot } : {}),
+            ...(input.session.revert.diff ? { diff: input.session.revert.diff } : {}),
+          }
+        : null,
       createdAt: toIso(input.session.time.created),
       updatedAt: toIso(input.session.time.updated),
     },

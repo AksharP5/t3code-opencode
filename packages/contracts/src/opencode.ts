@@ -225,6 +225,19 @@ export const OpenCodeFileDiff = Schema.Struct({
 });
 export type OpenCodeFileDiff = typeof OpenCodeFileDiff.Type;
 
+export const OpenCodeSharedSession = Schema.Struct({
+  url: Schema.String,
+});
+export type OpenCodeSharedSession = typeof OpenCodeSharedSession.Type;
+
+export const OpenCodeRevertedSession = Schema.Struct({
+  messageID: Schema.String,
+  partID: Schema.optional(Schema.String),
+  snapshot: Schema.optional(Schema.String),
+  diff: Schema.optional(Schema.String),
+});
+export type OpenCodeRevertedSession = typeof OpenCodeRevertedSession.Type;
+
 export const OpenCodeSessionSummary = Schema.Struct({
   id: OpenCodeIdentifier,
   slug: Schema.optional(Schema.String),
@@ -235,6 +248,8 @@ export const OpenCodeSessionSummary = Schema.Struct({
   title: Schema.String,
   version: Schema.optional(Schema.String),
   summary: Schema.optional(OpenCodeSessionSummaryInfo),
+  share: Schema.optional(OpenCodeSharedSession),
+  revert: Schema.optional(OpenCodeRevertedSession),
   permission: Schema.optional(OpenCodePermissionRuleset),
   time: OpenCodeSessionTime,
   project: Schema.optional(OpenCodeSessionProjectRef),
@@ -251,6 +266,8 @@ export const OpenCodeSession = Schema.Struct({
   title: Schema.String,
   version: Schema.optional(Schema.String),
   summary: Schema.optional(OpenCodeSessionSummaryInfo),
+  share: Schema.optional(OpenCodeSharedSession),
+  revert: Schema.optional(OpenCodeRevertedSession),
   permission: Schema.optional(OpenCodePermissionRuleset),
   time: OpenCodeSessionTime,
 });
@@ -506,6 +523,18 @@ export const OpenCodeRevertSessionInput = Schema.Struct({
   partId: Schema.optional(OpenCodeIdentifier),
 });
 export type OpenCodeRevertSessionInput = typeof OpenCodeRevertSessionInput.Type;
+
+export const OpenCodeShareSessionInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  sessionId: OpenCodeIdentifier,
+});
+export type OpenCodeShareSessionInput = typeof OpenCodeShareSessionInput.Type;
+
+export const OpenCodeUnshareSessionInput = OpenCodeShareSessionInput;
+export type OpenCodeUnshareSessionInput = typeof OpenCodeUnshareSessionInput.Type;
+
+export const OpenCodeUnrevertSessionInput = OpenCodeShareSessionInput;
+export type OpenCodeUnrevertSessionInput = typeof OpenCodeUnrevertSessionInput.Type;
 
 export const OpenCodeDeleteSessionInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,

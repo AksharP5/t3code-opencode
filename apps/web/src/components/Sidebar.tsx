@@ -631,6 +631,12 @@ export default function Sidebar() {
         [
           { id: "rename", label: "Rename session" },
           { id: "fork", label: "Fork session" },
+          thread.session?.shareUrl
+            ? { id: "unshare", label: "Remove share link" }
+            : { id: "share", label: "Create share link" },
+          ...(thread.session?.shareUrl
+            ? ([{ id: "copy-share-url", label: "Copy share URL" }] as const)
+            : []),
           { id: "copy-thread-id", label: "Copy Session ID" },
           { id: "delete", label: "Delete session", destructive: true },
         ],
@@ -657,6 +663,66 @@ export default function Sidebar() {
           toastManager.add({
             type: "error",
             title: "Failed to fork session",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          });
+        }
+        return;
+      }
+      if (clicked === "share") {
+        try {
+          const session = await api.opencode.shareSession({
+            ...openCodeConfig,
+            sessionId: threadId,
+          });
+          await refreshOpenCodeQueries();
+          if (session.share?.url) {
+            await copyTextToClipboard(session.share.url);
+            toastManager.add({
+              type: "success",
+              title: "Share link copied",
+              description: session.share.url,
+            });
+          }
+        } catch (error) {
+          toastManager.add({
+            type: "error",
+            title: "Failed to share session",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          });
+        }
+        return;
+      }
+      if (clicked === "unshare") {
+        try {
+          await api.opencode.unshareSession({
+            ...openCodeConfig,
+            sessionId: threadId,
+          });
+          await refreshOpenCodeQueries();
+        } catch (error) {
+          toastManager.add({
+            type: "error",
+            title: "Failed to remove share link",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          });
+        }
+        return;
+      }
+      if (clicked === "copy-share-url") {
+        if (!thread.session?.shareUrl) {
+          return;
+        }
+        try {
+          await copyTextToClipboard(thread.session.shareUrl);
+          toastManager.add({
+            type: "success",
+            title: "Share link copied",
+            description: thread.session.shareUrl,
+          });
+        } catch (error) {
+          toastManager.add({
+            type: "error",
+            title: "Failed to copy share link",
             description: error instanceof Error ? error.message : "An error occurred.",
           });
         }

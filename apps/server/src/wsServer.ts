@@ -1095,6 +1095,39 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeShareSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.shareSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to share OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeUnshareSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.unshareSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to unshare OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeUnrevertSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.unrevertSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to restore OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeGetVcs: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({

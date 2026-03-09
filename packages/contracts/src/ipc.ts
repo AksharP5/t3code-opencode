@@ -54,6 +54,9 @@ import type {
   OpenCodeSessionSummary,
   OpenCodeStatus,
   OpenCodeTodo,
+  OpenCodeShareSessionInput,
+  OpenCodeUnrevertSessionInput,
+  OpenCodeUnshareSessionInput,
   OpenCodeUpdateSessionInput,
   OpenCodeVcsInfo,
 } from "./opencode";
@@ -203,6 +206,9 @@ export interface NativeApi {
     replyQuestion: (input: OpenCodeReplyQuestionInput) => Promise<boolean>;
     rejectQuestion: (input: OpenCodeRejectQuestionInput) => Promise<boolean>;
     revertSession: (input: OpenCodeRevertSessionInput) => Promise<OpenCodeSession>;
+    shareSession: (input: OpenCodeShareSessionInput) => Promise<OpenCodeSession>;
+    unshareSession: (input: OpenCodeUnshareSessionInput) => Promise<OpenCodeSession>;
+    unrevertSession: (input: OpenCodeUnrevertSessionInput) => Promise<OpenCodeSession>;
     getVcs: (input: OpenCodeGetVcsInput) => Promise<OpenCodeVcsInfo>;
     createSession: (input: OpenCodeCreateSessionInput) => Promise<OpenCodeSession>;
     sendMessage: (input: OpenCodeSendMessageInput) => Promise<OpenCodeMessage | null>;

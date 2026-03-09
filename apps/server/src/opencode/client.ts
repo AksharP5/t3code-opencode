@@ -18,10 +18,13 @@ import type {
   OpenCodeRevertSessionInput,
   OpenCodeSendMessageInput,
   OpenCodeSession,
+  OpenCodeShareSessionInput,
   OpenCodeSessionStatusMap,
   OpenCodeSessionSummary,
   OpenCodeStatus,
   OpenCodeTodo,
+  OpenCodeUnrevertSessionInput,
+  OpenCodeUnshareSessionInput,
   OpenCodeProject,
   OpenCodeUpdateSessionInput,
   OpenCodeVcsInfo,
@@ -303,6 +306,57 @@ export async function revertOpenCodeSession(
   );
   if (!response.ok) {
     throw new Error(`OpenCode session revert failed with ${response.status}.`);
+  }
+  return decodeSession(await response.json());
+}
+
+export async function shareOpenCodeSession(
+  input: OpenCodeShareSessionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeSession> {
+  const response = await fetch(
+    `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/share`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode session share failed with ${response.status}.`);
+  }
+  return decodeSession(await response.json());
+}
+
+export async function unshareOpenCodeSession(
+  input: OpenCodeUnshareSessionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeSession> {
+  const response = await fetch(
+    `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/share`,
+    {
+      method: "DELETE",
+      headers: buildHeaders(config),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode session unshare failed with ${response.status}.`);
+  }
+  return decodeSession(await response.json());
+}
+
+export async function unrevertOpenCodeSession(
+  input: OpenCodeUnrevertSessionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeSession> {
+  const response = await fetch(
+    `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/unrevert`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode session unrevert failed with ${response.status}.`);
   }
   return decodeSession(await response.json());
 }
