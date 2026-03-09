@@ -3291,6 +3291,32 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [activeThread?.source, activeThreadId, openCodeConfig, openCodeState.pendingQuestions, setStoreThreadError],
   );
 
+  const onRejectUserInput = useCallback(
+    async (requestId: ApprovalRequestId) => {
+      const api = readNativeApi();
+      if (!api || !activeThreadId || activeThread?.source !== "opencode") {
+        return;
+      }
+
+      setRespondingUserInputRequestIds((existing) =>
+        existing.includes(requestId) ? existing : [...existing, requestId],
+      );
+      await api.opencode
+        .rejectQuestion({
+          ...openCodeConfig,
+          requestId,
+        })
+        .catch((err: unknown) => {
+          setStoreThreadError(
+            activeThreadId,
+            err instanceof Error ? err.message : "Failed to reject question.",
+          );
+        });
+      setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
+    },
+    [activeThread?.source, activeThreadId, openCodeConfig, setStoreThreadError],
+  );
+
   const setActivePendingUserInputQuestionIndex = useCallback(
     (nextQuestionIndex: number) => {
       if (!activePendingUserInput) {
@@ -4212,6 +4238,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                   questionIndex={activePendingQuestionIndex}
                   onSelectOption={onSelectActivePendingUserInputOption}
                   onAdvance={onAdvanceActivePendingUserInput}
+                  onReject={isOpenCodeThread ? onRejectUserInput : undefined}
                 />
               </div>
             ) : showPlanFollowUpPrompt && activeProposedPlan ? (
@@ -5043,6 +5070,7 @@ interface PendingUserInputPanelProps {
   questionIndex: number;
   onSelectOption: (questionId: string, optionLabel: string) => void;
   onAdvance: () => void;
+  onReject?: ((requestId: ApprovalRequestId) => void) | undefined;
 }
 
 const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
@@ -5052,6 +5080,7 @@ const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPane
   questionIndex,
   onSelectOption,
   onAdvance,
+  onReject,
 }: PendingUserInputPanelProps) {
   if (pendingUserInputs.length === 0) return null;
   const activePrompt = pendingUserInputs[0];
@@ -5066,6 +5095,7 @@ const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPane
       questionIndex={questionIndex}
       onSelectOption={onSelectOption}
       onAdvance={onAdvance}
+      onReject={onReject}
     />
   );
 });
@@ -5077,6 +5107,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   questionIndex,
   onSelectOption,
   onAdvance,
+  onReject,
 }: {
   prompt: PendingUserInput;
   isResponding: boolean;
@@ -5084,6 +5115,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   questionIndex: number;
   onSelectOption: (questionId: string, optionLabel: string) => void;
   onAdvance: () => void;
+  onReject?: ((requestId: ApprovalRequestId) => void) | undefined;
 }) {
   const progress = derivePendingUserInputProgress(prompt.questions, answers, questionIndex);
   const activeQuestion = progress.activeQuestion;
@@ -5163,6 +5195,18 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             {activeQuestion.header}
           </span>
         </div>
+        {onReject ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="ml-auto"
+            disabled={isResponding}
+            onClick={() => onReject(prompt.requestId)}
+          >
+            Reject
+          </Button>
+        ) : null}
       </div>
       <p className="mt-1.5 text-sm text-foreground/90">{activeQuestion.question}</p>
       <div className="mt-3 space-y-1">
