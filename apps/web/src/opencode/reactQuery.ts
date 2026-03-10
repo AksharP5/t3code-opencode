@@ -5,12 +5,14 @@ import type {
   OpenCodeGetSessionInput,
   OpenCodeGetTodoInput,
   OpenCodeListAgentsInput,
+  OpenCodeListCommandsInput,
   OpenCodeListMcpServersInput,
   OpenCodeListProviderAuthMethodsInput,
   OpenCodeListPermissionsInput,
   OpenCodeListQuestionsInput,
   OpenCodeListProvidersInput,
   OpenCodeListProjectsInput,
+  OpenCodeListResourcesInput,
   OpenCodeListSessionsInput,
 } from "@t3tools/contracts";
 import { ensureNativeApi } from "../nativeApi";
@@ -21,6 +23,8 @@ export const opencodeQueryKeys = {
   providers: (input: OpenCodeListProvidersInput) => ["opencode", "providers", input] as const,
   providerAuthMethods: (input: OpenCodeListProviderAuthMethodsInput) => ["opencode", "providerAuthMethods", input] as const,
   mcpServers: (input: OpenCodeListMcpServersInput) => ["opencode", "mcpServers", input] as const,
+  commands: (input: OpenCodeListCommandsInput) => ["opencode", "commands", input] as const,
+  resources: (input: OpenCodeListResourcesInput) => ["opencode", "resources", input] as const,
   agents: (input: OpenCodeListAgentsInput) => ["opencode", "agents", input] as const,
   projects: (input: OpenCodeListProjectsInput) => ["opencode", "projects", input] as const,
   sessions: (input: OpenCodeListSessionsInput) => ["opencode", "sessions", input] as const,
@@ -87,6 +91,24 @@ export function opencodeMcpServersQueryOptions(input: OpenCodeListMcpServersInpu
     staleTime: 5_000,
     refetchOnReconnect: true,
     refetchInterval: 5_000,
+  });
+}
+
+export function opencodeCommandsQueryOptions(input: OpenCodeListCommandsInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.commands(input),
+    queryFn: async () => ensureNativeApi().opencode.listCommands(input),
+    staleTime: 30_000,
+    refetchOnReconnect: true,
+  });
+}
+
+export function opencodeResourcesQueryOptions(input: OpenCodeListResourcesInput) {
+  return queryOptions({
+    queryKey: opencodeQueryKeys.resources(input),
+    queryFn: async () => ensureNativeApi().opencode.listResources(input),
+    staleTime: 30_000,
+    refetchOnReconnect: true,
   });
 }
 

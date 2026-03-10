@@ -35,6 +35,8 @@ import type {
   OpenCodeGetSessionInput,
   OpenCodeListAgentsInput,
   OpenCodeListMcpServersInput,
+  OpenCodeListCommandsInput,
+  OpenCodeListResourcesInput,
   OpenCodeListProviderAuthMethodsInput,
   OpenCodeListPermissionsInput,
   OpenCodeListQuestionsInput,
@@ -49,7 +51,9 @@ import type {
   OpenCodeProviderAuthMethod,
   OpenCodeProviderAuthorization,
   OpenCodeMcpAuthStartResult,
+  OpenCodeMcpResource,
   OpenCodeMcpStatus,
+  OpenCodeCommand,
   OpenCodeReplyPermissionInput,
   OpenCodeReplyQuestionInput,
   OpenCodeRejectQuestionInput,
@@ -75,6 +79,7 @@ import type {
   OpenCodeUnshareSessionInput,
   OpenCodeUpdateSessionInput,
   OpenCodeVcsInfo,
+  OpenCodeRunCommandInput,
 } from "./opencode";
 import type {
   TerminalClearInput,
@@ -210,6 +215,8 @@ export interface NativeApi {
     listProviders: (input: OpenCodeListProvidersInput) => Promise<OpenCodeProviderCatalog>;
     listProviderAuthMethods: (input: OpenCodeListProviderAuthMethodsInput) => Promise<Record<string, OpenCodeProviderAuthMethod[]>>;
     listMcpServers: (input: OpenCodeListMcpServersInput) => Promise<Record<string, OpenCodeMcpStatus>>;
+    listCommands: (input: OpenCodeListCommandsInput) => Promise<OpenCodeCommand[]>;
+    listResources: (input: OpenCodeListResourcesInput) => Promise<Record<string, OpenCodeMcpResource>>;
     listAgents: (input: OpenCodeListAgentsInput) => Promise<OpenCodeAgent[]>;
     listProjects: (input: OpenCodeListProjectsInput) => Promise<OpenCodeProject[]>;
     listSessions: (input: OpenCodeListSessionsInput) => Promise<OpenCodeSessionSummary[]>;
@@ -234,6 +241,7 @@ export interface NativeApi {
     removeMcpAuth: (input: OpenCodeRemoveMcpAuthInput) => Promise<boolean>;
     connectMcp: (input: OpenCodeConnectMcpInput) => Promise<boolean>;
     disconnectMcp: (input: OpenCodeDisconnectMcpInput) => Promise<boolean>;
+    runCommand: (input: OpenCodeRunCommandInput) => Promise<OpenCodeMessage | null>;
     shareSession: (input: OpenCodeShareSessionInput) => Promise<OpenCodeSession>;
     unshareSession: (input: OpenCodeUnshareSessionInput) => Promise<OpenCodeSession>;
     unrevertSession: (input: OpenCodeUnrevertSessionInput) => Promise<OpenCodeSession>;

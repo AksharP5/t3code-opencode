@@ -6,6 +6,7 @@ import type {
   OpenCodeCreateSessionInput,
   OpenCodeDeleteSessionInput,
   OpenCodeForkSessionInput,
+  OpenCodeListCommandsInput,
   OpenCodeEvent,
   OpenCodeAuthorizeProviderInput,
   OpenCodeCompleteProviderAuthInput,
@@ -16,6 +17,7 @@ import type {
   OpenCodeListMcpServersInput,
   OpenCodeListProviderAuthMethodsInput,
   OpenCodeListProjectsInput,
+  OpenCodeListResourcesInput,
   OpenCodeListPermissionsInput,
   OpenCodeListQuestionsInput,
   OpenCodeListSessionsInput,
@@ -26,6 +28,7 @@ import type {
   OpenCodeAuthenticateMcpInput,
   OpenCodeRemoveProviderAuthInput,
   OpenCodeRemoveMcpAuthInput,
+  OpenCodeRunCommandInput,
   OpenCodeSendMessageInput,
   OpenCodeSetProviderApiKeyInput,
   OpenCodeShareSessionInput,
@@ -49,6 +52,7 @@ import {
   deleteOpenCodeSession,
   fetchOpenCodeHealth,
   forkOpenCodeSession,
+  listOpenCodeCommands,
   getOpenCodeMessages,
   getOpenCodeDiff,
   getOpenCodeSession,
@@ -62,12 +66,14 @@ import {
   listOpenCodePermissions,
   listOpenCodeQuestions,
   listOpenCodeProjects,
+  listOpenCodeResources,
   listOpenCodeSessions,
   replyOpenCodePermission,
   replyOpenCodeQuestion,
   rejectOpenCodeQuestion,
   removeOpenCodeProviderAuth,
   removeOpenCodeMcpAuth,
+  runOpenCodeCommand,
   revertOpenCodeSession,
   setOpenCodeProviderApiKey,
   sendOpenCodeMessage,
@@ -167,6 +173,16 @@ export class OpenCodeBridge {
     return listOpenCodeMcpServers(config);
   }
 
+  async listCommands(input: OpenCodeListCommandsInput) {
+    const config = await this.ensureReady(input);
+    return listOpenCodeCommands(config);
+  }
+
+  async listResources(input: OpenCodeListResourcesInput) {
+    const config = await this.ensureReady(input);
+    return listOpenCodeResources(config);
+  }
+
   async authorizeProvider(input: OpenCodeAuthorizeProviderInput) {
     const config = await this.ensureReady(input);
     return authorizeOpenCodeProvider(input, config);
@@ -215,6 +231,11 @@ export class OpenCodeBridge {
   async disconnectMcp(input: OpenCodeDisconnectMcpInput) {
     const config = await this.ensureReady(input);
     return disconnectOpenCodeMcp(input, config);
+  }
+
+  async runCommand(input: OpenCodeRunCommandInput) {
+    const config = await this.ensureReady(input);
+    return runOpenCodeCommand(input, config);
   }
 
   async listAgents(input: OpenCodeListAgentsInput) {

@@ -4,12 +4,14 @@ import type {
   OpenCodeFileDiff,
   OpenCodeGetDiffInput,
   OpenCodeForkSessionInput,
+  OpenCodeCommand,
   OpenCodeCreateSessionInput,
   OpenCodeEvent,
   OpenCodeGetTodoInput,
   OpenCodeGetVcsInput,
   OpenCodeMessage,
   OpenCodeMcpAuthStartResult,
+  OpenCodeMcpResource,
   OpenCodeMcpStatus,
   OpenCodePermissionRequest,
   OpenCodeProviderAuthMethod,
@@ -29,6 +31,7 @@ import type {
   OpenCodeRemoveMcpAuthInput,
   OpenCodeRemoveProviderAuthInput,
   OpenCodeSendMessageInput,
+  OpenCodeRunCommandInput,
   OpenCodeSession,
   OpenCodeShareSessionInput,
   OpenCodeSetProviderApiKeyInput,
@@ -51,7 +54,9 @@ import {
   OpenCodeProviderAuthMethod as OpenCodeProviderAuthMethodSchema,
   OpenCodeProviderAuthorization as OpenCodeProviderAuthorizationSchema,
   OpenCodeMcpAuthStartResult as OpenCodeMcpAuthStartResultSchema,
+  OpenCodeMcpResource as OpenCodeMcpResourceSchema,
   OpenCodeMcpStatus as OpenCodeMcpStatusSchema,
+  OpenCodeCommand as OpenCodeCommandSchema,
   OpenCodeQuestionRequest as OpenCodeQuestionRequestSchema,
   OpenCodeProviderCatalog as OpenCodeProviderCatalogSchema,
   OpenCodeProject as OpenCodeProjectSchema,
@@ -67,6 +72,8 @@ import { getOpenCodeAuthHeader, type ResolvedOpenCodeConfig } from "./config";
 
 const decodeProjects = Schema.decodeUnknownSync(Schema.Array(OpenCodeProjectSchema));
 const decodeAgents = Schema.decodeUnknownSync(Schema.Array(OpenCodeAgentSchema));
+const decodeCommands = Schema.decodeUnknownSync(Schema.Array(OpenCodeCommandSchema));
+const decodeResources = Schema.decodeUnknownSync(Schema.Record(Schema.String, OpenCodeMcpResourceSchema));
 const decodeProviderCatalog = Schema.decodeUnknownSync(OpenCodeProviderCatalogSchema);
 const decodeSessions = Schema.decodeUnknownSync(Schema.Array(OpenCodeSessionSummarySchema));
 const decodeSession = Schema.decodeUnknownSync(OpenCodeSessionSchema);
@@ -228,6 +235,31 @@ export async function listOpenCodeMcpServers(
   return Object.fromEntries(Object.entries(statuses));
 }
 
+export async function listOpenCodeCommands(
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeCommand[]> {
+  const response = await fetch(`${config.baseUrl}/command`, {
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode command list failed with ${response.status}.`);
+  }
+  return Array.from(decodeCommands(await response.json()));
+}
+
+export async function listOpenCodeResources(
+  config: ResolvedOpenCodeConfig,
+): Promise<Record<string, OpenCodeMcpResource>> {
+  const response = await fetch(`${config.baseUrl}/experimental/resource`, {
+    headers: buildHeaders(config),
+  });
+  if (!response.ok) {
+    throw new Error(`OpenCode resource list failed with ${response.status}.`);
+  }
+  const resources = decodeResources(await response.json());
+  return Object.fromEntries(Object.entries(resources));
+}
+
 export async function startOpenCodeMcpAuth(
   input: OpenCodeStartMcpAuthInput,
   config: ResolvedOpenCodeConfig,
@@ -317,6 +349,35 @@ export async function disconnectOpenCodeMcp(
     throw new Error(`OpenCode MCP disconnect failed with ${response.status}.`);
   }
   return (await response.json()) === true;
+}
+
+export async function runOpenCodeCommand(
+  input: OpenCodeRunCommandInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeMessage | null> {
+  const response = await fetch(
+    `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/command`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify({
+        command: input.command,
+        arguments: input.arguments,
+        ...(input.agent ? { agent: input.agent } : {}),
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.variant ? { variant: input.variant } : {}),
+        ...(input.parts ? { parts: input.parts } : {}),
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode command run failed with ${response.status}.`);
+  }
+  const payload = (await response.json()) as { info?: unknown; parts?: unknown };
+  if (!payload.info || !payload.parts) {
+    return null;
+  }
+  return Schema.decodeUnknownSync(OpenCodeMessageSchema)(payload);
 }
 
 export async function listOpenCodeAgents(config: ResolvedOpenCodeConfig): Promise<OpenCodeAgent[]> {

@@ -152,6 +152,27 @@ export const OpenCodeMcpAuthStartResult = Schema.Struct({
 });
 export type OpenCodeMcpAuthStartResult = typeof OpenCodeMcpAuthStartResult.Type;
 
+export const OpenCodeCommand = Schema.Struct({
+  name: Schema.String,
+  description: Schema.optional(Schema.String),
+  agent: Schema.optional(Schema.String),
+  model: Schema.optional(Schema.String),
+  source: Schema.optional(Schema.Literals(["command", "mcp", "skill"])),
+  template: Schema.String,
+  subtask: Schema.optional(Schema.Boolean),
+  hints: Schema.Array(Schema.String),
+});
+export type OpenCodeCommand = typeof OpenCodeCommand.Type;
+
+export const OpenCodeMcpResource = Schema.Struct({
+  name: Schema.String,
+  uri: Schema.String,
+  description: Schema.optional(Schema.String),
+  mimeType: Schema.optional(Schema.String),
+  client: Schema.String,
+});
+export type OpenCodeMcpResource = typeof OpenCodeMcpResource.Type;
+
 const OpenCodeSessionTime = Schema.Struct({
   created: OpenCodeTimestamp,
   updated: OpenCodeTimestamp,
@@ -343,6 +364,7 @@ export const OpenCodePromptFilePart = Schema.Struct({
   mime: Schema.String,
   url: Schema.String,
   filename: Schema.optional(Schema.String),
+  source: Schema.optional(Schema.Unknown),
   id: Schema.optional(OpenCodeIdentifier),
 });
 export type OpenCodePromptFilePart = typeof OpenCodePromptFilePart.Type;
@@ -463,6 +485,12 @@ export type OpenCodeListProviderAuthMethodsInput = typeof OpenCodeListProviderAu
 
 export const OpenCodeListMcpServersInput = OpenCodeServerConfigInput;
 export type OpenCodeListMcpServersInput = typeof OpenCodeListMcpServersInput.Type;
+
+export const OpenCodeListCommandsInput = OpenCodeServerConfigInput;
+export type OpenCodeListCommandsInput = typeof OpenCodeListCommandsInput.Type;
+
+export const OpenCodeListResourcesInput = OpenCodeServerConfigInput;
+export type OpenCodeListResourcesInput = typeof OpenCodeListResourcesInput.Type;
 
 export const OpenCodeListAgentsInput = OpenCodeServerConfigInput;
 export type OpenCodeListAgentsInput = typeof OpenCodeListAgentsInput.Type;
@@ -637,6 +665,18 @@ export const OpenCodeDisconnectMcpInput = Schema.Struct({
   serverName: TrimmedNonEmptyString,
 });
 export type OpenCodeDisconnectMcpInput = typeof OpenCodeDisconnectMcpInput.Type;
+
+export const OpenCodeRunCommandInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  sessionId: OpenCodeIdentifier,
+  command: TrimmedNonEmptyString,
+  arguments: Schema.String,
+  agent: Schema.optional(Schema.String),
+  model: Schema.optional(Schema.String),
+  variant: Schema.optional(Schema.String),
+  parts: Schema.optional(Schema.Array(OpenCodePromptFilePart)),
+});
+export type OpenCodeRunCommandInput = typeof OpenCodeRunCommandInput.Type;
 
 export const OpenCodeDeleteSessionInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,

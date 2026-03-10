@@ -963,6 +963,28 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeListCommands: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listCommands(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode commands: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeListResources: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.listResources(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to list OpenCode resources: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeAuthorizeProvider: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({
@@ -1069,6 +1091,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           catch: (cause) =>
             new RouteRequestError({
               message: `Failed to disconnect OpenCode MCP server: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.opencodeRunCommand: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.runCommand(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to run OpenCode command: ${String(cause)}`,
             }),
         });
       }

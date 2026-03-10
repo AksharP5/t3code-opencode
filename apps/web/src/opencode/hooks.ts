@@ -14,12 +14,14 @@ import {
 import { useOpenCodeProjectOverlayStore } from "./projectOverlayStore";
 import {
   opencodeAgentsQueryOptions,
+  opencodeCommandsQueryOptions,
   opencodeDiffQueryOptions,
   opencodePermissionsQueryOptions,
   opencodeQuestionsQueryOptions,
   opencodeMessagesQueryOptions,
   opencodeProvidersQueryOptions,
   opencodeProjectsQueryOptions,
+  opencodeResourcesQueryOptions,
   opencodeSessionQueryOptions,
   opencodeSessionsQueryOptions,
   opencodeStatusesQueryOptions,
@@ -45,6 +47,14 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
   });
   const providersQuery = useQuery({
     ...opencodeProvidersQueryOptions(config),
+    enabled: statusQuery.data?.healthy === true,
+  });
+  const commandsQuery = useQuery({
+    ...opencodeCommandsQueryOptions(config),
+    enabled: statusQuery.data?.healthy === true,
+  });
+  const resourcesQuery = useQuery({
+    ...opencodeResourcesQueryOptions(config),
     enabled: statusQuery.data?.healthy === true,
   });
   const agentsQuery = useQuery({
@@ -220,6 +230,8 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     statusQuery,
     agentCatalog,
     providerCatalog: providersQuery.data ?? null,
+    commands: commandsQuery.data ?? [],
+    resources: resourcesQuery.data ?? {},
     pendingPermissions: permissionsQuery.data ?? [],
     pendingQuestions: questionsQuery.data ?? [],
     activeTodos: todoQuery.data ?? [],
