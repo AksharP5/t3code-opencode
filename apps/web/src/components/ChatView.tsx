@@ -2292,7 +2292,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         return;
       }
       if (command === "undo") {
-        const latestUserMessage = [...activeThread.messages].reverse().find((message) => message.role === "user");
+        const latestUserMessage = activeThread.messages.toReversed().find((message) => message.role === "user");
         if (!latestUserMessage) {
           return;
         }
@@ -2350,7 +2350,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     },
     [
       activeThread,
-      copyTextToClipboard,
       handleOpenCodeAgentChange,
       navigate,
       openCodeConfig,
