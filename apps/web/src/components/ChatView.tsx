@@ -585,6 +585,13 @@ type ComposerCommandItem =
     }
   | {
       id: string;
+      type: "opencode-builtin";
+      command: "compact" | "fork" | "share" | "unshare" | "undo" | "redo" | "mcp" | "agent";
+      label: string;
+      description: string;
+    }
+  | {
+      id: string;
       type: "model";
       provider: ProviderKind;
       model: ModelSlug;
@@ -615,6 +622,14 @@ function buildTemporaryWorktreeBranchName(): string {
   // Keep the 8-hex suffix shape for backend temporary-branch detection.
   const token = crypto.randomUUID().slice(0, 8).toLowerCase();
   return `${WORKTREE_BRANCH_PREFIX}/${token}`;
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  throw new Error("Clipboard is not available.");
 }
 
 function cloneComposerImageForRetry(image: ComposerImageAttachment): ComposerImageAttachment {
@@ -1624,6 +1639,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
           description: "Switch this thread back to normal chat mode",
         },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
+      const openCodeBuiltinItems = isOpenCodeThread
+        ? ([
+            { id: "opencode-builtin:compact", type: "opencode-builtin", command: "compact", label: "/compact", description: "Summarize this OpenCode session" },
+            { id: "opencode-builtin:fork", type: "opencode-builtin", command: "fork", label: "/fork", description: "Fork the current OpenCode session" },
+            { id: "opencode-builtin:share", type: "opencode-builtin", command: "share", label: "/share", description: "Create a share link for this session" },
+            { id: "opencode-builtin:unshare", type: "opencode-builtin", command: "unshare", label: "/unshare", description: "Remove the share link for this session" },
+            { id: "opencode-builtin:undo", type: "opencode-builtin", command: "undo", label: "/undo", description: "Revert the latest user turn" },
+            { id: "opencode-builtin:redo", type: "opencode-builtin", command: "redo", label: "/redo", description: "Restore a reverted session" },
+            { id: "opencode-builtin:mcp", type: "opencode-builtin", command: "mcp", label: "/mcp", description: "Open MCP settings" },
+            { id: "opencode-builtin:agent", type: "opencode-builtin", command: "agent", label: "/agent", description: "Cycle the active OpenCode agent" },
+          ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "opencode-builtin" }>>)
+        : [];
       const openCodeCommandItems = isOpenCodeThread
         ? openCodeState.commands.map((command) => ({
             id: `opencode-command:${command.name}`,
@@ -1634,7 +1661,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
           }))
         : [];
       const availableSlashCommandItems = isOpenCodeThread
-        ? openCodeCommandItems
+        ? [...openCodeBuiltinItems, ...openCodeCommandItems]
         : slashCommandItems;
       const query = composerTrigger.query.trim().toLowerCase();
       if (!query) {
@@ -2228,6 +2255,110 @@ export default function ChatView({ threadId }: ChatViewProps) {
       setComposerDraftAgent,
       setComposerDraftInteractionMode,
       threadId,
+    ],
+  );
+
+  const runOpenCodeBuiltinCommand = useCallback(
+    async (
+      command: "compact" | "fork" | "share" | "unshare" | "undo" | "redo" | "mcp" | "agent",
+    ) => {
+      const api = readNativeApi();
+      if (!api || !activeThread || activeThread.source !== "opencode") {
+        return;
+      }
+      if (command === "mcp") {
+        await navigate({ to: "/settings" });
+        return;
+      }
+      if (command === "agent") {
+        const agents = openCodeState.agentCatalog.visible;
+        if (agents.length === 0) {
+          return;
+        }
+        const currentIndex = agents.findIndex((agent) => agent.name === openCodeSelectedAgent);
+        const nextAgent = agents[(currentIndex + 1 + agents.length) % agents.length];
+        if (nextAgent) {
+          handleOpenCodeAgentChange(nextAgent.name);
+        }
+        return;
+      }
+      if (command === "redo") {
+        if (!activeThread.session?.revert) {
+          return;
+        }
+        await api.opencode.unrevertSession({ ...openCodeConfig, sessionId: activeThread.id }).catch((err: unknown) => {
+          setThreadError(activeThread.id, err instanceof Error ? err.message : "Failed to restore session.");
+        });
+        return;
+      }
+      if (command === "undo") {
+        const latestUserMessage = [...activeThread.messages].reverse().find((message) => message.role === "user");
+        if (!latestUserMessage) {
+          return;
+        }
+        await api.opencode
+          .revertSession({ ...openCodeConfig, sessionId: activeThread.id, messageId: latestUserMessage.id })
+          .catch((err: unknown) => {
+            setThreadError(activeThread.id, err instanceof Error ? err.message : "Failed to revert session.");
+          });
+        return;
+      }
+      if (command === "fork") {
+        await api.opencode
+          .forkSession({ ...openCodeConfig, sessionId: activeThread.id })
+          .then(async (session) => {
+            await navigate({ to: "/$threadId", params: { threadId: ThreadId.makeUnsafe(session.id) } });
+          })
+          .catch((err: unknown) => {
+            setThreadError(activeThread.id, err instanceof Error ? err.message : "Failed to fork session.");
+          });
+        return;
+      }
+      if (command === "share") {
+        await api.opencode
+          .shareSession({ ...openCodeConfig, sessionId: activeThread.id })
+          .then(async (session) => {
+            if (session.share?.url) {
+              await copyTextToClipboard(session.share.url);
+            }
+          })
+          .catch((err: unknown) => {
+            setThreadError(activeThread.id, err instanceof Error ? err.message : "Failed to share session.");
+          });
+        return;
+      }
+      if (command === "unshare") {
+        await api.opencode.unshareSession({ ...openCodeConfig, sessionId: activeThread.id }).catch((err: unknown) => {
+          setThreadError(activeThread.id, err instanceof Error ? err.message : "Failed to remove share link.");
+        });
+        return;
+      }
+      const selectedOpenCodeModel = openCodeModelCatalog.lookup.get(selectedModel);
+      if (!selectedOpenCodeModel) {
+        return;
+      }
+      await api.opencode
+        .summarizeSession({
+          ...openCodeConfig,
+          sessionId: activeThread.id,
+          providerID: selectedOpenCodeModel.providerID,
+          modelID: selectedOpenCodeModel.modelID,
+        })
+        .catch((err: unknown) => {
+          setThreadError(activeThread.id, err instanceof Error ? err.message : "Failed to compact session.");
+        });
+    },
+    [
+      activeThread,
+      copyTextToClipboard,
+      handleOpenCodeAgentChange,
+      navigate,
+      openCodeConfig,
+      openCodeSelectedAgent,
+      openCodeState.agentCatalog.visible,
+      openCodeModelCatalog.lookup,
+      selectedModel,
+      setThreadError,
     ],
   );
 
@@ -4134,6 +4265,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
         }
         return;
       }
+      if (item.type === "opencode-builtin") {
+        void runOpenCodeBuiltinCommand(item.command);
+        const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
+          expectedText: expectedToken,
+        });
+        if (applied) {
+          setComposerHighlightedItemId(null);
+        }
+        return;
+      }
       onProviderModelSelect(item.provider, item.model);
       const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
         expectedText: expectedToken,
@@ -4147,6 +4288,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       handleInteractionModeChange,
       onProviderModelSelect,
       resolveActiveComposerTrigger,
+      runOpenCodeBuiltinCommand,
     ],
   );
   const onComposerMenuItemHighlighted = useCallback((itemId: string | null) => {
