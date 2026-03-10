@@ -206,6 +206,7 @@ export function createWsNativeApi(): NativeApi {
       connectMcp: (input) => transport.request(WS_METHODS.opencodeConnectMcp, input),
       disconnectMcp: (input) => transport.request(WS_METHODS.opencodeDisconnectMcp, input),
       runCommand: (input) => transport.request(WS_METHODS.opencodeRunCommand, input),
+      summarizeSession: (input) => transport.request(WS_METHODS.opencodeSummarizeSession, input),
       listAgents: (input) => transport.request(WS_METHODS.opencodeListAgents, input),
       listProjects: (input) => transport.request(WS_METHODS.opencodeListProjects, input),
       listSessions: (input) => transport.request(WS_METHODS.opencodeListSessions, input),

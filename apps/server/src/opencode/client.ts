@@ -36,6 +36,7 @@ import type {
   OpenCodeShareSessionInput,
   OpenCodeSetProviderApiKeyInput,
   OpenCodeStartMcpAuthInput,
+  OpenCodeSummarizeSessionInput,
   OpenCodeSessionStatusMap,
   OpenCodeSessionSummary,
   OpenCodeStatus,
@@ -378,6 +379,28 @@ export async function runOpenCodeCommand(
     return null;
   }
   return Schema.decodeUnknownSync(OpenCodeMessageSchema)(payload);
+}
+
+export async function summarizeOpenCodeSession(
+  input: OpenCodeSummarizeSessionInput,
+  config: ResolvedOpenCodeConfig,
+): Promise<boolean> {
+  const response = await fetch(
+    `${config.baseUrl}/session/${encodeURIComponent(input.sessionId)}/summarize`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+      body: JSON.stringify({
+        providerID: input.providerID,
+        modelID: input.modelID,
+        ...(input.auto !== undefined ? { auto: input.auto } : {}),
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`OpenCode summarize failed with ${response.status}.`);
+  }
+  return (await response.json()) === true;
 }
 
 export async function listOpenCodeAgents(config: ResolvedOpenCodeConfig): Promise<OpenCodeAgent[]> {

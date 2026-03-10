@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createOpenCodeSession,
   authorizeOpenCodeProvider,
+  listOpenCodeCommands,
   completeOpenCodeProviderAuth,
   connectOpenCodeMcp,
   fetchOpenCodeHealth,
@@ -12,15 +13,18 @@ import {
   getOpenCodeVcs,
   listOpenCodeProviderAuthMethods,
   listOpenCodeMcpServers,
+  listOpenCodeResources,
   removeOpenCodeProviderAuth,
   removeOpenCodeMcpAuth,
   replyOpenCodePermission,
   replyOpenCodeQuestion,
   revertOpenCodeSession,
+  runOpenCodeCommand,
   sendOpenCodeMessage,
   setOpenCodeProviderApiKey,
   shareOpenCodeSession,
   startOpenCodeMcpAuth,
+  summarizeOpenCodeSession,
   completeOpenCodeMcpAuth,
   authenticateOpenCodeMcp,
   disconnectOpenCodeMcp,
@@ -423,6 +427,29 @@ describe("opencode client", () => {
     expect(call?.[0]).toBe("http://127.0.0.1:4096/mcp");
   });
 
+  it("loads OpenCode commands and resources", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ name: "review", description: "Review changes", template: "review", hints: [] }],
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          resourceA: { name: "resourceA", uri: "mcp://resourceA", client: "github" },
+        }),
+      } as Response);
+
+    await expect(listOpenCodeCommands(config)).resolves.toHaveLength(1);
+    await expect(listOpenCodeResources(config)).resolves.toEqual({
+      resourceA: { name: "resourceA", uri: "mcp://resourceA", client: "github" },
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:4096/command");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://127.0.0.1:4096/experimental/resource");
+  });
+
   it("starts MCP oauth", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
@@ -490,6 +517,39 @@ describe("opencode client", () => {
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:4096/mcp/github/connect");
     expect(fetchMock.mock.calls[1]?.[0]).toBe("http://127.0.0.1:4096/mcp/github/disconnect");
+  });
+
+  it("runs commands and summarizes sessions", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          info: { id: "message-1", sessionID: "session-1", role: "assistant", time: { created: 1 } },
+          parts: [],
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => true,
+      } as Response);
+
+    await expect(
+      runOpenCodeCommand(
+        { ...config, sessionId: "session-1", command: "review", arguments: "--staged" },
+        config,
+      ),
+    ).resolves.toMatchObject({ info: { id: "message-1" } });
+
+    await expect(
+      summarizeOpenCodeSession(
+        { ...config, sessionId: "session-1", providerID: "anthropic", modelID: "claude-3-7-sonnet" },
+        config,
+      ),
+    ).resolves.toBe(true);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:4096/session/session-1/command");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://127.0.0.1:4096/session/session-1/summarize");
   });
 
   it("replies to OpenCode permission prompts", async () => {

@@ -1106,6 +1106,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.opencodeSummarizeSession: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: () => openCodeBridge.summarizeSession(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to summarize OpenCode session: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.opencodeListAgents: {
         const body = stripRequestTag(request.body);
         return yield* Effect.tryPromise({

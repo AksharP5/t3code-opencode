@@ -678,6 +678,15 @@ export const OpenCodeRunCommandInput = Schema.Struct({
 });
 export type OpenCodeRunCommandInput = typeof OpenCodeRunCommandInput.Type;
 
+export const OpenCodeSummarizeSessionInput = Schema.Struct({
+  ...OpenCodeServerConfigInput.fields,
+  sessionId: OpenCodeIdentifier,
+  providerID: TrimmedNonEmptyString,
+  modelID: TrimmedNonEmptyString,
+  auto: Schema.optional(Schema.Boolean),
+});
+export type OpenCodeSummarizeSessionInput = typeof OpenCodeSummarizeSessionInput.Type;
+
 export const OpenCodeDeleteSessionInput = Schema.Struct({
   ...OpenCodeServerConfigInput.fields,
   sessionId: OpenCodeIdentifier,

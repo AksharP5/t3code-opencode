@@ -34,6 +34,7 @@ import type {
   OpenCodeShareSessionInput,
   OpenCodeStartMcpAuthInput,
   OpenCodeStatus,
+  OpenCodeSummarizeSessionInput,
   OpenCodeCompleteMcpAuthInput,
   OpenCodeConnectMcpInput,
   OpenCodeDisconnectMcpInput,
@@ -75,6 +76,7 @@ import {
   removeOpenCodeMcpAuth,
   runOpenCodeCommand,
   revertOpenCodeSession,
+  summarizeOpenCodeSession,
   setOpenCodeProviderApiKey,
   sendOpenCodeMessage,
   shareOpenCodeSession,
@@ -236,6 +238,11 @@ export class OpenCodeBridge {
   async runCommand(input: OpenCodeRunCommandInput) {
     const config = await this.ensureReady(input);
     return runOpenCodeCommand(input, config);
+  }
+
+  async summarizeSession(input: OpenCodeSummarizeSessionInput) {
+    const config = await this.ensureReady(input);
+    return summarizeOpenCodeSession(input, config);
   }
 
   async listAgents(input: OpenCodeListAgentsInput) {

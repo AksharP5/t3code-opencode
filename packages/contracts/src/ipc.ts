@@ -75,6 +75,7 @@ import type {
   OpenCodeShareSessionInput,
   OpenCodeSetProviderApiKeyInput,
   OpenCodeStartMcpAuthInput,
+  OpenCodeSummarizeSessionInput,
   OpenCodeUnrevertSessionInput,
   OpenCodeUnshareSessionInput,
   OpenCodeUpdateSessionInput,
@@ -242,6 +243,7 @@ export interface NativeApi {
     connectMcp: (input: OpenCodeConnectMcpInput) => Promise<boolean>;
     disconnectMcp: (input: OpenCodeDisconnectMcpInput) => Promise<boolean>;
     runCommand: (input: OpenCodeRunCommandInput) => Promise<OpenCodeMessage | null>;
+    summarizeSession: (input: OpenCodeSummarizeSessionInput) => Promise<boolean>;
     shareSession: (input: OpenCodeShareSessionInput) => Promise<OpenCodeSession>;
     unshareSession: (input: OpenCodeUnshareSessionInput) => Promise<OpenCodeSession>;
     unrevertSession: (input: OpenCodeUnrevertSessionInput) => Promise<OpenCodeSession>;
