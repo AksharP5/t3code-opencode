@@ -310,6 +310,30 @@ function buildOpenCodeQuestionAnswers(
   });
 }
 
+function resolveOpenCodeCommandSubmission(
+  text: string,
+  commands: ReadonlyArray<{ name: string }>,
+): { command: string; arguments: string } | null {
+  if (!text.startsWith("/")) {
+    return null;
+  }
+  const [head, ...rest] = text.split(" ");
+  if (!head) {
+    return null;
+  }
+  const command = head.slice(1);
+  if (!command) {
+    return null;
+  }
+  if (!commands.some((entry) => entry.name === command)) {
+    return null;
+  }
+  return {
+    command,
+    arguments: rest.join(" "),
+  };
+}
+
 function resolveOpenCodeAuthError(messages: ReadonlyArray<ChatMessage>): { message: string; providerId: string | null } | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
@@ -537,8 +561,25 @@ type ComposerCommandItem =
     }
   | {
       id: string;
+      type: "resource";
+      resourceName: string;
+      resourceUri: string;
+      clientName: string;
+      mimeType?: string;
+      label: string;
+      description: string;
+    }
+  | {
+      id: string;
       type: "slash-command";
       command: ComposerSlashCommand;
+      label: string;
+      description: string;
+    }
+  | {
+      id: string;
+      type: "opencode-command";
+      command: string;
       label: string;
       description: string;
     }
@@ -591,18 +632,81 @@ function cloneComposerImageForRetry(image: ComposerImageAttachment): ComposerIma
 }
 
 async function buildOpenCodePromptParts(
-  text: string,
-  images: readonly ComposerImageAttachment[],
+  input: {
+    text: string;
+    images: readonly ComposerImageAttachment[];
+    cwd: string | null;
+    resources: Readonly<
+      Record<
+        string,
+        {
+          name: string;
+          uri: string;
+          client: string;
+          description?: string | undefined;
+          mimeType?: string | undefined;
+        }
+      >
+    >;
+  },
 ): Promise<NonNullable<OpenCodeSendMessageInput["parts"]>> {
   const parts: OpenCodePromptPart[] = [];
-  if (text.length > 0) {
-    parts.push({
-      type: "text",
-      text,
-    });
+  const resourceByName = new Map(
+    Object.values(input.resources).map((resource) => [resource.name, resource] as const),
+  );
+  const mentionPattern = /@([^\s]+)/g;
+  let cursor = 0;
+  for (const match of input.text.matchAll(mentionPattern)) {
+    const full = match[0];
+    const value = match[1];
+    const start = match.index ?? 0;
+    const end = start + full.length;
+    if (start > cursor) {
+      const textPart = input.text.slice(cursor, start);
+      if (textPart.length > 0) {
+        parts.push({ type: "text", text: textPart });
+      }
+    }
+    const resource = value ? resourceByName.get(value) : undefined;
+    if (resource) {
+      parts.push({
+        type: "file",
+        mime: resource.mimeType ?? "text/plain",
+        filename: resource.name,
+        url: resource.uri,
+        source: {
+          type: "resource",
+          text: { value: "", start: 0, end: 0 },
+          clientName: resource.client,
+          uri: resource.uri,
+        },
+      });
+      cursor = end;
+      continue;
+    }
+    if (input.cwd) {
+      if (!value) {
+        cursor = end;
+        continue;
+      }
+      parts.push({
+        type: "file",
+        mime: "text/plain",
+        filename: value,
+        url: buildOpenCodeFileUrl(input.cwd, value),
+      });
+      cursor = end;
+      continue;
+    }
+  }
+  if (cursor < input.text.length) {
+    const textPart = input.text.slice(cursor);
+    if (textPart.length > 0) {
+      parts.push({ type: "text", text: textPart });
+    }
   }
   const imageParts = await Promise.all(
-    images.map(async (image) => ({
+    input.images.map(async (image) => ({
       type: "file" as const,
       mime: image.mimeType,
       filename: image.name,
@@ -611,6 +715,12 @@ async function buildOpenCodePromptParts(
   );
   parts.push(...imageParts);
   return parts;
+}
+
+function buildOpenCodeFileUrl(cwd: string, relativePath: string): string {
+  const normalizedCwd = cwd.replace(/\/+$/, "");
+  const normalizedPath = relativePath.replace(/^\/+/, "");
+  return `file://${encodeURI(`${normalizedCwd}/${normalizedPath}`)}`;
 }
 
 const VscodeEntryIcon = memo(function VscodeEntryIcon(props: {
@@ -1514,7 +1624,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
           description: "Switch this thread back to normal chat mode",
         },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
-      const availableSlashCommandItems = isOpenCodeThread ? [] : slashCommandItems;
+      const openCodeCommandItems = isOpenCodeThread
+        ? openCodeState.commands.map((command) => ({
+            id: `opencode-command:${command.name}`,
+            type: "opencode-command" as const,
+            command: command.name,
+            label: `/${command.name}`,
+            description: command.description ?? "OpenCode command",
+          }))
+        : [];
+      const availableSlashCommandItems = isOpenCodeThread
+        ? openCodeCommandItems
+        : slashCommandItems;
       const query = composerTrigger.query.trim().toLowerCase();
       if (!query) {
         return [...availableSlashCommandItems];
@@ -1525,7 +1646,43 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }
 
     if (isOpenCodeThread) {
-      return [];
+      const query = composerTrigger.query.trim().toLowerCase();
+      const resourceItems = Object.values(openCodeState.resources)
+        .filter((resource) => {
+          if (!query) return true;
+          const haystack = `${resource.name} ${resource.uri} ${resource.client}`.toLowerCase();
+          return haystack.includes(query);
+        })
+        .map((resource) => {
+          const item: Extract<ComposerCommandItem, { type: "resource" }> = {
+            id: `resource:${resource.client}:${resource.uri}`,
+            type: "resource",
+            resourceName: resource.name,
+            resourceUri: resource.uri,
+            clientName: resource.client,
+            label: resource.name,
+            description: resource.description ?? resource.uri,
+          };
+          if (resource.mimeType) {
+            item.mimeType = resource.mimeType;
+          }
+          return item;
+        });
+      const fileItems = workspaceEntries
+        .filter(({ path, parentPath }) => {
+          if (!query) return true;
+          const haystack = `${path} ${parentPath ?? ""}`.toLowerCase();
+          return haystack.includes(query);
+        })
+        .map((entry) => ({
+          id: `path:${entry.path}`,
+          type: "path" as const,
+          path: entry.path,
+          pathKind: entry.kind,
+          label: basenameOfPath(entry.path),
+          description: entry.parentPath ?? "",
+        }));
+      return [...resourceItems, ...fileItems];
     }
 
     return searchableModelOptions
@@ -1544,7 +1701,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
         label: name,
         description: `${providerLabel} · ${slug}`,
       }));
-  }, [composerTrigger, isOpenCodeThread, searchableModelOptions, workspaceEntries]);
+  }, [
+    composerTrigger,
+    isOpenCodeThread,
+    openCodeState.commands,
+    openCodeState.resources,
+    searchableModelOptions,
+    workspaceEntries,
+  ]);
   const composerMenuOpen = Boolean(composerTrigger);
   const activeComposerMenuItem = useMemo(
     () =>
@@ -2902,7 +3066,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
     if (isOpenCodeThread) {
       if (!activeProject) return;
       const selectedOpenCodeModel = openCodeModelCatalog.lookup.get(selectedModel);
-      const parts = await buildOpenCodePromptParts(trimmed, composerImagesSnapshot);
+      const openCodeCommand = resolveOpenCodeCommandSubmission(trimmed, openCodeState.commands);
+      const parts = await buildOpenCodePromptParts({
+        text: trimmed,
+        images: composerImagesSnapshot,
+        cwd: activeThread.worktreePath ?? activeProject.cwd,
+        resources: openCodeState.resources,
+      });
       const isOpenCodeDraftThread = activeThread.session === null;
       const shouldCreateWorktree =
         isOpenCodeDraftThread && envMode === "worktree" && !activeThread.worktreePath;
@@ -2963,13 +3133,25 @@ export default function ChatView({ threadId }: ChatViewProps) {
           });
         }
 
-        await api.opencode.sendMessage({
-          ...openCodeConfig,
-          sessionId: targetSessionId,
-          parts,
-          ...(openCodeSelectedAgent ? { agent: openCodeSelectedAgent } : {}),
-          ...(selectedOpenCodeModel ? { model: selectedOpenCodeModel } : {}),
-        });
+        if (openCodeCommand) {
+          await api.opencode.runCommand({
+            ...openCodeConfig,
+            sessionId: targetSessionId,
+            command: openCodeCommand.command,
+            arguments: openCodeCommand.arguments,
+            ...(openCodeSelectedAgent ? { agent: openCodeSelectedAgent } : {}),
+            ...(selectedOpenCodeModel ? { model: `${selectedOpenCodeModel.providerID}/${selectedOpenCodeModel.modelID}` } : {}),
+            parts: parts.filter((part): part is Extract<OpenCodePromptPart, { type: "file" }> => part.type === "file"),
+          });
+        } else {
+          await api.opencode.sendMessage({
+            ...openCodeConfig,
+            sessionId: targetSessionId,
+            parts,
+            ...(openCodeSelectedAgent ? { agent: openCodeSelectedAgent } : {}),
+            ...(selectedOpenCodeModel ? { model: selectedOpenCodeModel } : {}),
+          });
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to send message.";
         promptRef.current = trimmed;
@@ -3912,6 +4094,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
         }
         return;
       }
+      if (item.type === "resource") {
+        const applied = applyPromptReplacement(
+          trigger.rangeStart,
+          trigger.rangeEnd,
+          `@${item.resourceName} `,
+          { expectedText: expectedToken },
+        );
+        if (applied) {
+          setComposerHighlightedItemId(null);
+        }
+        return;
+      }
       if (item.type === "slash-command") {
         if (item.command === "model") {
           const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "/model ", {
@@ -3924,6 +4118,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
         }
         void handleInteractionModeChange(item.command === "plan" ? "plan" : "default");
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
+          expectedText: expectedToken,
+        });
+        if (applied) {
+          setComposerHighlightedItemId(null);
+        }
+        return;
+      }
+      if (item.type === "opencode-command") {
+        const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, `/${item.command} `, {
           expectedText: expectedToken,
         });
         if (applied) {
