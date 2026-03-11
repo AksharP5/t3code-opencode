@@ -166,6 +166,7 @@ import { Group, GroupSeparator } from "./ui/group";
 import {
   Menu,
   MenuGroup,
+  MenuGroupLabel,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -7164,40 +7165,29 @@ const OpenCodeModelPicker = memo(function OpenCodeModelPicker(props: {
           <ChevronDownIcon aria-hidden="true" className="size-3 opacity-60" />
         </span>
       </MenuTrigger>
-      <MenuPopup align="start">
-        {props.sections.map((section) => (
-          <MenuSub key={section.providerId}>
-            <MenuSubTrigger>{section.providerName}</MenuSubTrigger>
-            <MenuSubPopup className="[--available-height:min(24rem,70vh)]">
-              <MenuGroup>
-                <MenuRadioGroup
-                  value={
-                    section.models.some((model) => model.slug === props.selectedModel)
-                      ? props.selectedModel
-                      : ""
-                  }
-                  onValueChange={(value) => {
-                    if (!value || props.disabled) {
-                      return;
-                    }
-                    props.onModelChange(value);
-                    setIsMenuOpen(false);
-                  }}
-                >
-                  {section.models.map((model) => (
-                    <MenuRadioItem
-                      key={`${section.providerId}:${model.slug}`}
-                      value={model.slug}
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      {model.name}
-                    </MenuRadioItem>
-                  ))}
-                </MenuRadioGroup>
-              </MenuGroup>
-            </MenuSubPopup>
-          </MenuSub>
-        ))}
+      <MenuPopup align="start" className="w-80 [--available-height:min(28rem,75vh)]">
+        <MenuRadioGroup
+          value={props.selectedModel}
+          onValueChange={(value) => {
+            if (!value || props.disabled) {
+              return;
+            }
+            props.onModelChange(value);
+            setIsMenuOpen(false);
+          }}
+        >
+          {props.sections.map((section, sectionIndex) => (
+            <MenuGroup key={section.providerId}>
+              {sectionIndex > 0 ? <MenuDivider /> : null}
+              <MenuGroupLabel>{section.providerName}</MenuGroupLabel>
+              {section.models.map((model) => (
+                <MenuRadioItem key={`${section.providerId}:${model.slug}`} value={model.slug}>
+                  <span className="truncate">{model.name}</span>
+                </MenuRadioItem>
+              ))}
+            </MenuGroup>
+          ))}
+        </MenuRadioGroup>
       </MenuPopup>
     </Menu>
   );
