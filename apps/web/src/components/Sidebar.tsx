@@ -1517,8 +1517,13 @@ export default function Sidebar() {
                                       onClick={(event) => event.stopPropagation()}
                                     />
                                   ) : (
-                                    <span className="min-w-0 flex-1 truncate text-xs">
-                                      {thread.title}
+                                    <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs">
+                                      {thread.parentThreadId ? (
+                                        <span className="shrink-0 rounded border border-border/70 px-1 py-0.5 text-[9px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                                          Fork
+                                        </span>
+                                      ) : null}
+                                      <span className="min-w-0 truncate">{thread.title}</span>
                                     </span>
                                   )}
                                 </div>
@@ -1561,7 +1566,7 @@ export default function Sidebar() {
                                 expandThreadListForProject(project.id);
                               }}
                             >
-                              <span>Show more</span>
+                              <span>Show {projectThreads.length - THREAD_PREVIEW_LIMIT} more</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}

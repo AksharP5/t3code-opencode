@@ -6841,9 +6841,13 @@ const MessagesTimeline = memo(function MessagesTimeline({
                     {row.message.text}
                   </pre>
                 )}
-                {row.message.structuredParts && row.message.structuredParts.length > 0 ? (
-                  <OpenCodeMessageParts parts={row.message.structuredParts} cwd={markdownCwd} />
-                ) : null}
+                {(() => {
+                  const structuredParts = row.message.structuredParts;
+                  if (!structuredParts || structuredParts.length === 0) {
+                    return null;
+                  }
+                  return <OpenCodeMessageParts parts={structuredParts} cwd={markdownCwd} />;
+                })()}
                 <div className="mt-1.5 flex items-center justify-end gap-2">
                   <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
                     {row.message.text && <MessageCopyButton text={row.message.text} />}
@@ -6872,7 +6876,9 @@ const MessagesTimeline = memo(function MessagesTimeline({
       {row.kind === "message" &&
         row.message.role === "assistant" &&
         (() => {
-          const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+          const hasStructuredParts =
+            row.message.structuredParts !== undefined && row.message.structuredParts.length > 0;
+          const messageText = row.message.text || (row.message.streaming || hasStructuredParts ? "" : "(empty response)");
           return (
             <>
               {row.showCompletionDivider && (
@@ -6890,9 +6896,13 @@ const MessagesTimeline = memo(function MessagesTimeline({
                   cwd={markdownCwd}
                   isStreaming={Boolean(row.message.streaming)}
                 />
-                {row.message.structuredParts && row.message.structuredParts.length > 0 ? (
-                  <OpenCodeMessageParts parts={row.message.structuredParts} cwd={markdownCwd} />
-                ) : null}
+                {(() => {
+                  const structuredParts = row.message.structuredParts;
+                  if (!structuredParts || structuredParts.length === 0) {
+                    return null;
+                  }
+                  return <OpenCodeMessageParts parts={structuredParts} cwd={markdownCwd} />;
+                })()}
                 {(() => {
                   const turnSummary = turnDiffSummaryByAssistantMessageId.get(row.message.id);
                   if (!turnSummary) return null;

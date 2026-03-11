@@ -44,6 +44,14 @@ function renderToolState(part: OpenCodeMessagePart): { status: string; detail?: 
   };
 }
 
+function toolDetailPreview(detail: string, maxLength = 180): string {
+  const normalized = detail.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength).trimEnd()}...`;
+}
+
 export default function OpenCodeMessageParts(props: {
   parts: ReadonlyArray<OpenCodeMessagePart>;
   cwd: string | undefined;
@@ -71,6 +79,10 @@ export default function OpenCodeMessageParts(props: {
 
         if (part.type === "tool") {
           const toolState = renderToolState(part);
+          const isCollapsible =
+            toolState?.detail !== undefined &&
+            toolState.status === "completed" &&
+            toolState.detail.length > 120;
           return (
             <div key={key} className="rounded-lg border border-border/70 bg-card/50 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
@@ -82,7 +94,16 @@ export default function OpenCodeMessageParts(props: {
                 </span>
               </div>
               <p className="mt-1 font-mono text-xs text-foreground">{part.tool ?? "unknown"}</p>
-              {toolState?.detail ? (
+              {toolState?.detail && isCollapsible ? (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-muted-foreground">
+                    {toolDetailPreview(toolState.detail)}
+                  </summary>
+                  <pre className="mt-2 whitespace-pre-wrap break-words rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
+                    {toolState.detail}
+                  </pre>
+                </details>
+              ) : toolState?.detail ? (
                 <pre className="mt-2 whitespace-pre-wrap break-words rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
                   {toolState.detail}
                 </pre>
