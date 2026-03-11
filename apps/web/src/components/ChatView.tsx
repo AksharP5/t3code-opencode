@@ -2634,6 +2634,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
     planSidebarDismissedForTurnRef.current = null;
   }, [activeThread?.id]);
 
+  useEffect(() => {
+    if (activeThread?.source !== "opencode") {
+      return;
+    }
+    if (!activeThread.session || !messagesScrollElement) {
+      return;
+    }
+    shouldAutoScrollRef.current = false;
+    lastKnownScrollTopRef.current = 0;
+    messagesScrollElement.scrollTop = 0;
+  }, [activeThread?.id, activeThread?.session, activeThread?.source, messagesScrollElement]);
+
 
 
   useEffect(() => {
