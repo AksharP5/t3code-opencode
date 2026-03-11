@@ -1144,6 +1144,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
     () => buildOpenCodeModelCatalog(openCodeState.providerCatalog, activeThread?.model ?? composerDraft.model),
     [activeThread?.model, composerDraft.model, openCodeState.providerCatalog],
   );
+  const openCodeModelSections = useMemo(
+    () => buildOpenCodeModelSections(openCodeState.providerCatalog),
+    [openCodeState.providerCatalog],
+  );
   const openCodeSelectedAgent = useMemo(() => {
     if (!isOpenCodeThread) {
       return null;
@@ -4463,6 +4467,28 @@ export default function ChatView({ threadId }: ChatViewProps) {
     );
   }
 
+  if (threadId && activeThread?.source === "opencode" && !openCodeState.activeThreadHydrated) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
+        Loading OpenCode conversation...
+      </div>
+    );
+  }
+
+  if (threadId && activeThread?.source === "opencode" && openCodeState.activeThreadLoadError) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
+        <div className="mx-auto flex w-full max-w-3xl flex-1 items-center px-3 py-4 sm:px-5">
+          <Alert variant="error">
+            <CircleAlertIcon />
+            <AlertTitle>Failed to load OpenCode conversation</AlertTitle>
+            <AlertDescription>{openCodeState.activeThreadLoadError}</AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    );
+  }
+
   if (openCodeState.status && !openCodeState.status.healthy) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
@@ -4832,15 +4858,23 @@ export default function ChatView({ threadId }: ChatViewProps) {
                   )}
                 >
                   {/* Provider/model picker */}
-                  <ProviderModelPicker
-                    compact={isComposerFooterCompact}
-                    provider={selectedProvider}
-                    model={selectedModelForPickerWithCustomFallback}
-                    lockedProvider={lockedProvider}
-                    modelOptionsByProvider={modelOptionsByProvider}
-                    disabled={false}
-                    onProviderModelChange={onProviderModelSelect}
-                  />
+                  {isOpenCodeThread ? (
+                    <OpenCodeModelPicker
+                      sections={openCodeModelSections}
+                      selectedModel={selectedModelForPickerWithCustomFallback}
+                      onModelChange={(model) => setComposerDraftModel(threadId, model)}
+                    />
+                  ) : (
+                    <ProviderModelPicker
+                      compact={isComposerFooterCompact}
+                      provider={selectedProvider}
+                      model={selectedModelForPickerWithCustomFallback}
+                      lockedProvider={lockedProvider}
+                      modelOptionsByProvider={modelOptionsByProvider}
+                      disabled={false}
+                      onProviderModelChange={onProviderModelSelect}
+                    />
+                  )}
 
                   {isComposerFooterCompact ? (
                     <CompactComposerControlsMenu
@@ -6749,6 +6783,103 @@ function buildOpenCodeModelCatalog(
     lookup,
   };
 }
+
+function buildOpenCodeModelSections(catalog: OpenCodeProviderCatalog | null): ReadonlyArray<{
+  providerId: string;
+  providerName: string;
+  models: ReadonlyArray<{ slug: string; name: string }>;
+}> {
+  if (!catalog) {
+    return [];
+  }
+  return catalog.all
+    .map((provider) => ({
+      providerId: provider.id,
+      providerName: provider.name,
+      models: Object.values(provider.models)
+        .map((model) => ({ slug: model.id, name: model.name }))
+        .toSorted((left, right) => left.name.localeCompare(right.name)),
+    }))
+    .filter((provider) => provider.models.length > 0)
+    .toSorted((left, right) => left.providerName.localeCompare(right.providerName));
+}
+
+const OpenCodeModelPicker = memo(function OpenCodeModelPicker(props: {
+  sections: ReadonlyArray<{
+    providerId: string;
+    providerName: string;
+    models: ReadonlyArray<{ slug: string; name: string }>;
+  }>;
+  selectedModel: string;
+  disabled?: boolean;
+  onModelChange: (model: string) => void;
+}) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const selectedEntry = props.sections
+    .flatMap((section) => section.models.map((model) => ({ ...model, providerName: section.providerName })))
+    .find((entry) => entry.slug === props.selectedModel);
+
+  return (
+    <Menu
+      open={isMenuOpen}
+      onOpenChange={(open) => {
+        if (props.disabled) {
+          setIsMenuOpen(false);
+          return;
+        }
+        setIsMenuOpen(open);
+      }}
+    >
+      <MenuTrigger
+        render={
+          <Button
+            size="sm"
+            variant="ghost"
+            className="min-w-0 shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+            disabled={props.disabled}
+          />
+        }
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <OpenCodeIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground/70" />
+          <span className="truncate">{selectedEntry?.name ?? props.selectedModel}</span>
+          <ChevronDownIcon aria-hidden="true" className="size-3 opacity-60" />
+        </span>
+      </MenuTrigger>
+      <MenuPopup align="start">
+        {props.sections.map((section) => (
+          <MenuSub key={section.providerId}>
+            <MenuSubTrigger>{section.providerName}</MenuSubTrigger>
+            <MenuSubPopup className="[--available-height:min(24rem,70vh)]">
+              <MenuGroup>
+                <MenuRadioGroup
+                  value={section.models.some((model) => model.slug === props.selectedModel) ? props.selectedModel : ""}
+                  onValueChange={(value) => {
+                    if (!value || props.disabled) {
+                      return;
+                    }
+                    props.onModelChange(value);
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  {section.models.map((model) => (
+                    <MenuRadioItem
+                      key={`${section.providerId}:${model.slug}`}
+                      value={model.slug}
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      {model.name}
+                    </MenuRadioItem>
+                  ))}
+                </MenuRadioGroup>
+              </MenuGroup>
+            </MenuSubPopup>
+          </MenuSub>
+        ))}
+      </MenuPopup>
+    </Menu>
+  );
+});
 
 const OpenCodeBranchToolbar = memo(function OpenCodeBranchToolbar(props: {
   activeProjectCwd: string | null;

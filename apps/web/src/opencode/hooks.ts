@@ -192,6 +192,14 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     threads,
     vcsQuery.data,
   ]);
+  const activeThreadHydrated =
+    threadId === undefined ||
+    (sessionQuery.status === "success" && messagesQuery.status === "success");
+  const activeThreadLoadError =
+    threadId === undefined
+      ? null
+      : ((sessionQuery.error instanceof Error ? sessionQuery.error.message : null) ??
+          (messagesQuery.error instanceof Error ? messagesQuery.error.message : null));
 
   const activeThreadWithDiff = useMemo(() => {
     const activeDiff = diffQuery.data ?? [];
@@ -239,6 +247,8 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     projects,
     threads,
     activeThread: activeThreadWithDiff,
+    activeThreadHydrated,
+    activeThreadLoadError,
     threadsHydrated:
       statusQuery.status === "success" &&
       projectsQuery.status !== "pending" &&
