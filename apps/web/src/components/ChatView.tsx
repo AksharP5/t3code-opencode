@@ -4712,27 +4712,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
     );
   }
 
-  if (threadId && activeThread?.source === "opencode" && !openCodeState.activeThreadHydrated) {
-    return (
-      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
-        Loading OpenCode conversation...
-      </div>
-    );
-  }
-
-  if (threadId && activeThread?.source === "opencode" && openCodeState.activeThreadLoadError) {
-    return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
-        <div className="mx-auto flex w-full max-w-3xl flex-1 items-center px-3 py-4 sm:px-5">
-          <Alert variant="error">
-            <CircleAlertIcon />
-            <AlertTitle>Failed to load OpenCode conversation</AlertTitle>
-            <AlertDescription>{openCodeState.activeThreadLoadError}</AlertDescription>
-          </Alert>
-        </div>
-      </div>
-    );
-  }
+  const showOpenCodeConversationLoading =
+    threadId !== undefined &&
+    activeThread?.source === "opencode" &&
+    !openCodeState.activeThreadHydrated &&
+    openCodeState.activeThreadLoadError === null;
+  const showOpenCodeConversationError =
+    threadId !== undefined &&
+    activeThread?.source === "opencode" &&
+    openCodeState.activeThreadLoadError !== null;
 
   if (openCodeState.status && !openCodeState.status.healthy) {
     return (
@@ -4875,51 +4863,65 @@ export default function ChatView({ threadId }: ChatViewProps) {
             onPointerUp={onMessagesPointerUp}
             onPointerCancel={onMessagesPointerCancel}
             onTouchStart={onMessagesTouchStart}
-            onTouchMove={onMessagesTouchMove}
-            onTouchEnd={onMessagesTouchEnd}
-            onTouchCancel={onMessagesTouchEnd}
-          >
-            <MessagesTimeline
-              key={activeThread.id}
-              hasMessages={timelineEntries.length > 0}
-              isWorking={isWorking}
-              activeTurnInProgress={isWorking || !latestTurnSettled}
-              activeTurnStartedAt={activeWorkStartedAt}
-              scrollContainer={messagesScrollElement}
-              timelineEntries={timelineEntries}
-              completionDividerBeforeEntryId={completionDividerBeforeEntryId}
-              completionSummary={completionSummary}
-              turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
-              nowIso={nowIso}
-              expandedWorkGroups={expandedWorkGroups}
-              allowSourceMessageRevert={isOpenCodeThread}
-              onToggleWorkGroup={onToggleWorkGroup}
-              onOpenTurnDiff={onOpenTurnDiff}
-              revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
-              onRevertUserMessage={onRevertUserMessage}
-              isRevertingCheckpoint={isRevertingCheckpoint}
-              onImageExpand={onExpandTimelineImage}
-              markdownCwd={gitCwd ?? undefined}
-              resolvedTheme={resolvedTheme}
-              workspaceRoot={activeProject?.cwd ?? undefined}
-            />
+        onTouchMove={onMessagesTouchMove}
+        onTouchEnd={onMessagesTouchEnd}
+        onTouchCancel={onMessagesTouchEnd}
+      >
+        {showOpenCodeConversationError ? (
+          <div className="mx-auto flex h-full w-full max-w-3xl items-center">
+            <Alert variant="error">
+              <CircleAlertIcon />
+              <AlertTitle>Failed to load OpenCode conversation</AlertTitle>
+              <AlertDescription>{openCodeState.activeThreadLoadError}</AlertDescription>
+            </Alert>
           </div>
+        ) : showOpenCodeConversationLoading ? (
+          <div className="mx-auto flex h-full w-full max-w-3xl items-center justify-center text-sm text-muted-foreground">
+            Loading OpenCode conversation...
+          </div>
+        ) : (
+          <MessagesTimeline
+            key={activeThread.id}
+            hasMessages={timelineEntries.length > 0}
+            isWorking={isWorking}
+            activeTurnInProgress={isWorking || !latestTurnSettled}
+            activeTurnStartedAt={activeWorkStartedAt}
+            scrollContainer={messagesScrollElement}
+            timelineEntries={timelineEntries}
+            completionDividerBeforeEntryId={completionDividerBeforeEntryId}
+            completionSummary={completionSummary}
+            turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
+            nowIso={nowIso}
+            expandedWorkGroups={expandedWorkGroups}
+            allowSourceMessageRevert={isOpenCodeThread}
+            onToggleWorkGroup={onToggleWorkGroup}
+            onOpenTurnDiff={onOpenTurnDiff}
+            revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
+            onRevertUserMessage={onRevertUserMessage}
+            isRevertingCheckpoint={isRevertingCheckpoint}
+            onImageExpand={onExpandTimelineImage}
+            markdownCwd={gitCwd ?? undefined}
+            resolvedTheme={resolvedTheme}
+            workspaceRoot={activeProject?.cwd ?? undefined}
+          />
+        )}
+      </div>
 
           {/* Input bar */}
           <div className={cn("px-3 pt-1.5 sm:px-5 sm:pt-2", isGitRepo ? "pb-1" : "pb-3 sm:pb-4")}>
-            {isOpenCodeThread && openCodeState.activeDiff.length > 0 ? (
-              <div className="mx-auto mb-2 w-full max-w-3xl">
-                <OpenCodeDiffDock
-                  diff={openCodeState.activeDiff}
-                  cwd={activeThread.worktreePath ?? activeProject?.cwd ?? null}
-                />
-              </div>
-            ) : null}
-            {isOpenCodeThread && openCodeState.activeTodos.length > 0 ? (
-              <div className="mx-auto mb-2 w-full max-w-3xl">
-                <OpenCodeTodoDock todos={openCodeState.activeTodos} />
-              </div>
-            ) : null}
+        {isOpenCodeThread && !showOpenCodeConversationLoading && openCodeState.activeDiff.length > 0 ? (
+          <div className="mx-auto mb-2 w-full max-w-3xl">
+            <OpenCodeDiffDock
+              diff={openCodeState.activeDiff}
+              cwd={activeThread.worktreePath ?? activeProject?.cwd ?? null}
+            />
+          </div>
+        ) : null}
+        {isOpenCodeThread && !showOpenCodeConversationLoading && openCodeState.activeTodos.length > 0 ? (
+          <div className="mx-auto mb-2 w-full max-w-3xl">
+            <OpenCodeTodoDock todos={openCodeState.activeTodos} />
+          </div>
+        ) : null}
             <form
               ref={composerFormRef}
               onSubmit={onSend}

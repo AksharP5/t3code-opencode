@@ -165,10 +165,15 @@ function ChatThreadRouteView() {
     Object.hasOwn(store.draftThreadsByThreadId, threadId),
   );
   const routeThreadExists =
+    openCodeState.activeThread !== null ||
     openCodeState.threads.some((thread) => thread.id === threadId) ||
     threadExists ||
     draftThreadExists;
   const threadDataHydrated = openCodeState.threadsHydrated;
+  const waitingForOpenCodeThreadResolution =
+    openCodeState.status?.healthy === true &&
+    !openCodeState.activeThreadHydrated &&
+    openCodeState.activeThreadLoadError === null;
   const activeThread =
     openCodeState.activeThread ??
     openCodeState.threads.find((thread) => thread.id === threadId) ??
@@ -197,7 +202,7 @@ function ChatThreadRouteView() {
   }, [navigate, threadId]);
 
   useEffect(() => {
-    if (!threadDataHydrated) {
+    if (!threadDataHydrated || waitingForOpenCodeThreadResolution) {
       return;
     }
 
@@ -205,9 +210,9 @@ function ChatThreadRouteView() {
       void navigate({ to: "/", replace: true });
       return;
     }
-  }, [navigate, routeThreadExists, threadDataHydrated, threadId]);
+  }, [navigate, routeThreadExists, threadDataHydrated, waitingForOpenCodeThreadResolution, threadId]);
 
-  if (!threadDataHydrated || !routeThreadExists) {
+  if (!threadDataHydrated || waitingForOpenCodeThreadResolution || !routeThreadExists) {
     return null;
   }
 

@@ -41,41 +41,42 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     ...opencodeStatusQueryOptions(config),
     enabled: true,
   });
+  const openCodeQueriesEnabled = statusQuery.data?.healthy !== false;
   const projectsQuery = useQuery({
     ...opencodeProjectsQueryOptions(config),
-    enabled: statusQuery.data?.healthy === true,
+    enabled: openCodeQueriesEnabled,
   });
   const providersQuery = useQuery({
     ...opencodeProvidersQueryOptions(config),
-    enabled: statusQuery.data?.healthy === true,
+    enabled: openCodeQueriesEnabled,
   });
   const commandsQuery = useQuery({
     ...opencodeCommandsQueryOptions(config),
-    enabled: statusQuery.data?.healthy === true,
+    enabled: openCodeQueriesEnabled,
   });
   const resourcesQuery = useQuery({
     ...opencodeResourcesQueryOptions(config),
-    enabled: statusQuery.data?.healthy === true,
+    enabled: openCodeQueriesEnabled,
   });
   const agentsQuery = useQuery({
     ...opencodeAgentsQueryOptions(config),
-    enabled: statusQuery.data?.healthy === true,
+    enabled: openCodeQueriesEnabled,
   });
   const sessionsQuery = useQuery({
-    ...opencodeSessionsQueryOptions({ ...config, limit: 200 }),
-    enabled: statusQuery.data?.healthy === true,
+    ...opencodeSessionsQueryOptions({ ...config, limit: 1000 }),
+    enabled: openCodeQueriesEnabled,
   });
   const statusesQuery = useQuery({
     ...opencodeStatusesQueryOptions(config),
-    enabled: statusQuery.data?.healthy === true,
+    enabled: openCodeQueriesEnabled,
   });
   const sessionQuery = useQuery({
     ...opencodeSessionQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
-    enabled: statusQuery.data?.healthy === true && threadId !== undefined,
+    enabled: openCodeQueriesEnabled && threadId !== undefined,
   });
   const messagesQuery = useQuery({
     ...opencodeMessagesQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
-    enabled: statusQuery.data?.healthy === true && threadId !== undefined,
+    enabled: openCodeQueriesEnabled && threadId !== undefined,
     refetchInterval: () => {
       if (!threadId) {
         return false;
@@ -86,19 +87,19 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
   });
   const permissionsQuery = useQuery({
     ...opencodePermissionsQueryOptions(config),
-    enabled: statusQuery.data?.healthy === true,
+    enabled: openCodeQueriesEnabled,
   });
   const questionsQuery = useQuery({
     ...opencodeQuestionsQueryOptions(config),
-    enabled: statusQuery.data?.healthy === true,
+    enabled: openCodeQueriesEnabled,
   });
   const todoQuery = useQuery({
     ...opencodeTodoQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
-    enabled: statusQuery.data?.healthy === true && threadId !== undefined,
+    enabled: openCodeQueriesEnabled && threadId !== undefined,
   });
   const diffQuery = useQuery({
     ...opencodeDiffQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
-    enabled: statusQuery.data?.healthy === true && threadId !== undefined,
+    enabled: openCodeQueriesEnabled && threadId !== undefined,
   });
   const agentCatalog = useMemo(
     () => buildOpenCodeAgentCatalog(agentsQuery.data),
@@ -160,7 +161,7 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
 
   const vcsQuery = useQuery({
     ...opencodeVcsQueryOptions({ ...config, directory: activeSessionDirectory ?? "missing" }),
-    enabled: statusQuery.data?.healthy === true && activeSessionDirectory !== null,
+    enabled: openCodeQueriesEnabled && activeSessionDirectory !== null,
   });
 
   const activeThread = useMemo(() => {
