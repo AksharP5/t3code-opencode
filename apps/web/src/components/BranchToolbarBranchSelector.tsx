@@ -48,6 +48,7 @@ interface BranchToolbarBranchSelectorProps {
   branchCwd: string | null;
   effectiveEnvMode: EnvMode;
   envLocked: boolean;
+  autoSelectCurrentBranch?: boolean;
   onSetThreadBranch: (branch: string | null, worktreePath: string | null) => void;
   onCheckoutPullRequestRequest?: (reference: string) => void;
   onComposerFocusRequest?: () => void;
@@ -79,6 +80,7 @@ export function BranchToolbarBranchSelector({
   branchCwd,
   effectiveEnvMode,
   envLocked,
+  autoSelectCurrentBranch = true,
   onSetThreadBranch,
   onCheckoutPullRequestRequest,
   onComposerFocusRequest,
@@ -254,6 +256,7 @@ export function BranchToolbarBranchSelector({
 
   useEffect(() => {
     if (
+      !autoSelectCurrentBranch ||
       effectiveEnvMode !== "worktree" ||
       activeWorktreePath ||
       activeThreadBranch ||
@@ -265,6 +268,7 @@ export function BranchToolbarBranchSelector({
   }, [
     activeThreadBranch,
     activeWorktreePath,
+    autoSelectCurrentBranch,
     currentGitBranch,
     effectiveEnvMode,
     onSetThreadBranch,

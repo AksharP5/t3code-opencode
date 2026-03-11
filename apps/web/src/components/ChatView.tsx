@@ -1122,6 +1122,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [activeThread?.id, activeThread?.source, openCodeState.pendingQuestions],
   );
   const isOpenCodeThread = activeThread?.source === "opencode";
+  const composerFooterCompact = isComposerFooterCompact || isOpenCodeThread;
   const activeOpenCodeAuthError = useMemo(
     () => (isOpenCodeThread ? resolveOpenCodeAuthError(activeThread?.messages ?? []) : null),
     [activeThread?.messages, isOpenCodeThread],
@@ -5100,7 +5101,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     data-chat-composer-footer="true"
                     className={cn(
                       "flex items-center justify-between px-2.5 pb-2.5 sm:px-3 sm:pb-3",
-                      isComposerFooterCompact
+                      composerFooterCompact
                         ? "gap-1.5"
                         : "flex-wrap gap-2 sm:flex-nowrap sm:gap-0",
                     )}
@@ -5108,7 +5109,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     <div
                       className={cn(
                         "flex min-w-0 flex-1 items-center",
-                        isComposerFooterCompact
+                        composerFooterCompact
                           ? "gap-1 overflow-hidden"
                           : "gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:overflow-visible",
                       )}
@@ -5122,7 +5123,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         />
                       ) : (
                         <ProviderModelPicker
-                          compact={isComposerFooterCompact}
+                          compact={composerFooterCompact}
                           provider={selectedProvider}
                           model={selectedModelForPickerWithCustomFallback}
                           lockedProvider={lockedProvider}
@@ -5132,7 +5133,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         />
                       )}
 
-                      {isComposerFooterCompact ? (
+                      {composerFooterCompact ? (
                         <CompactComposerControlsMenu
                           activePlan={Boolean(activePlan || activeProposedPlan || planSidebarOpen)}
                           openCodeAgents={
@@ -5483,7 +5484,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
       {isGitRepo && isOpenCodeThread ? (
         <OpenCodeBranchToolbar
           activeProjectCwd={activeProject?.cwd ?? null}
-          activeThreadBranch={activeThread.branch}
+          activeThreadBranch={activeThread.session === null ? activeThread.branch : null}
+          hasPreparedFork={activeThread.session === null && activeThread.branch !== null}
           onSetThreadBranch={(branch, worktreePath) => {
             void onOpenCodeBranchSelection(branch, worktreePath);
           }}
@@ -7208,6 +7210,7 @@ const OpenCodeModelPicker = memo(function OpenCodeModelPicker(props: {
 const OpenCodeBranchToolbar = memo(function OpenCodeBranchToolbar(props: {
   activeProjectCwd: string | null;
   activeThreadBranch: string | null;
+  hasPreparedFork: boolean;
   onSetThreadBranch: (branch: string | null, worktreePath: string | null) => void;
   onComposerFocusRequest?: () => void;
 }) {
@@ -7221,6 +7224,11 @@ const OpenCodeBranchToolbar = memo(function OpenCodeBranchToolbar(props: {
         <span className="border border-transparent px-[calc(--spacing(2)-1px)] text-sm font-medium text-muted-foreground/70 sm:text-xs">
           Fork worktree
         </span>
+        {!props.hasPreparedFork ? (
+          <span className="hidden text-[11px] text-muted-foreground/50 sm:inline">
+            Select a base branch to prepare the fork.
+          </span>
+        ) : null}
       </div>
 
       <BranchToolbarBranchSelector
@@ -7230,6 +7238,7 @@ const OpenCodeBranchToolbar = memo(function OpenCodeBranchToolbar(props: {
         branchCwd={props.activeProjectCwd}
         effectiveEnvMode="worktree"
         envLocked={false}
+        autoSelectCurrentBranch={false}
         onSetThreadBranch={props.onSetThreadBranch}
         {...(props.onComposerFocusRequest
           ? { onComposerFocusRequest: props.onComposerFocusRequest }
@@ -7242,7 +7251,7 @@ const OpenCodeBranchToolbar = memo(function OpenCodeBranchToolbar(props: {
 const OpenCodeTodoDock = memo(function OpenCodeTodoDock(props: {
   todos: ReadonlyArray<OpenCodeTodo>;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const completed = props.todos.filter((todo) => todo.status === "completed").length;
   const active =
     props.todos.find((todo) => todo.status === "in_progress") ??
@@ -7317,7 +7326,7 @@ const OpenCodeDiffDock = memo(function OpenCodeDiffDock(props: {
   diff: ReadonlyArray<OpenCodeFileDiff>;
   cwd: string | null;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const additions = props.diff.reduce((sum, file) => sum + file.additions, 0);
   const deletions = props.diff.reduce((sum, file) => sum + file.deletions, 0);
   const openFile = useCallback(
