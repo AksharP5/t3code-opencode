@@ -628,6 +628,21 @@ function buildTemporaryWorktreeBranchName(): string {
   return `${WORKTREE_BRANCH_PREFIX}/${token}`;
 }
 
+function countTrailingNonUserMessages(messages: ReadonlyArray<ChatMessage>): number {
+  let count = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message) {
+      continue;
+    }
+    if (message.role === "user") {
+      return count;
+    }
+    count += 1;
+  }
+  return count;
+}
+
 async function copyTextToClipboard(text: string): Promise<void> {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -2826,10 +2841,32 @@ export default function ChatView({ threadId }: ChatViewProps) {
     if (!activeThread.session || !messagesScrollElement) {
       return;
     }
-    shouldAutoScrollRef.current = false;
-    lastKnownScrollTopRef.current = 0;
-    messagesScrollElement.scrollTop = 0;
-  }, [activeThread?.id, activeThread?.session, activeThread?.source, messagesScrollElement]);
+    const trailingNonUserMessages = countTrailingNonUserMessages(activeThread.messages);
+    if (trailingNonUserMessages <= 4) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const latestUserMessage = activeThread.messages.toReversed().find((message) => message.role === "user");
+      if (!latestUserMessage) {
+        return;
+      }
+      const target = messagesScrollElement.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(latestUserMessage.id)}"]`,
+      );
+      if (!target) {
+        return;
+      }
+      const targetTop = target.offsetTop;
+      messagesScrollElement.scrollTop = Math.max(0, targetTop - 16);
+      lastKnownScrollTopRef.current = messagesScrollElement.scrollTop;
+      shouldAutoScrollRef.current = false;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [activeThread?.id, activeThread?.messages, activeThread?.session, activeThread?.source, messagesScrollElement]);
   useEffect(() => {
     if (!composerMenuOpen) {
       setComposerHighlightedItemId(null);
@@ -6540,6 +6577,23 @@ const MessagesTimeline = memo(function MessagesTimeline({
 
   const firstUnvirtualizedRowIndex = useMemo(() => {
     const firstTailRowIndex = Math.max(rows.length - ALWAYS_UNVIRTUALIZED_TAIL_ROWS, 0);
+    const lastUserRowIndex = (() => {
+      for (let index = rows.length - 1; index >= 0; index -= 1) {
+        const row = rows[index];
+        if (row?.kind === "message" && row.message.role === "user") {
+          return index;
+        }
+      }
+      return -1;
+    })();
+
+    if (!activeTurnInProgress && lastUserRowIndex >= 0) {
+      const trailingRowCount = rows.length - 1 - lastUserRowIndex;
+      if (trailingRowCount > 4) {
+        return lastUserRowIndex;
+      }
+    }
+
     if (!activeTurnInProgress) return firstTailRowIndex;
 
     const turnStartedAtMs =
