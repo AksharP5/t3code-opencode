@@ -104,9 +104,20 @@ interface PrStatusIndicator {
 type ThreadPr = GitStatusResult["pr"];
 
 function threadActivityTimestamp(thread: Thread): number {
+  const activityIso = resolveThreadActivityIso(thread);
+  if (!activityIso) {
+    return 0;
+  }
+  const timestamp = Date.parse(activityIso);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function resolveThreadActivityIso(thread: Thread): string | null {
   const candidates = [
-    thread.session?.updatedAt,
     thread.latestTurn?.completedAt,
+    thread.latestTurn?.startedAt,
+    thread.latestTurn?.requestedAt,
+    thread.session?.updatedAt,
     thread.lastVisitedAt,
     thread.createdAt,
   ];
@@ -117,11 +128,11 @@ function threadActivityTimestamp(thread: Thread): number {
     }
     const timestamp = Date.parse(value);
     if (!Number.isNaN(timestamp)) {
-      return timestamp;
+      return value;
     }
   }
 
-  return 0;
+  return null;
 }
 
 function compareThreadsByActivity(left: Thread, right: Thread): number {
@@ -1531,7 +1542,7 @@ export default function Sidebar() {
                                         : "text-muted-foreground/40"
                                     }`}
                                   >
-                                    {formatRelativeTime(thread.createdAt)}
+                                    {formatRelativeTime(resolveThreadActivityIso(thread) ?? thread.createdAt)}
                                   </span>
                                 </div>
                               </SidebarMenuSubButton>
