@@ -103,7 +103,9 @@ export const OpenCodeProviderModel = Schema.Struct({
   options: Schema.Record(Schema.String, Schema.Unknown),
   headers: Schema.Record(Schema.String, Schema.String),
   release_date: Schema.String,
-  variants: Schema.optional(Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown))),
+  variants: Schema.optional(
+    Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
+  ),
 });
 export type OpenCodeProviderModel = typeof OpenCodeProviderModel.Type;
 

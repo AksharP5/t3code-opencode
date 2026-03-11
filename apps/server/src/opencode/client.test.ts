@@ -234,9 +234,7 @@ describe("opencode client", () => {
   it("loads session todos", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
-      json: async () => [
-        { content: "Ship integration", status: "in_progress", priority: "high" },
-      ],
+      json: async () => [{ content: "Ship integration", status: "in_progress", priority: "high" }],
     } as Response);
 
     await expect(
@@ -247,9 +245,7 @@ describe("opencode client", () => {
         },
         config,
       ),
-    ).resolves.toEqual([
-      { content: "Ship integration", status: "in_progress", priority: "high" },
-    ]);
+    ).resolves.toEqual([{ content: "Ship integration", status: "in_progress", priority: "high" }]);
 
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/session/session-1/todo");
@@ -406,9 +402,9 @@ describe("opencode client", () => {
       json: async () => true,
     } as Response);
 
-    await expect(removeOpenCodeProviderAuth({ ...config, providerId: "openai" }, config)).resolves.toBe(
-      true,
-    );
+    await expect(
+      removeOpenCodeProviderAuth({ ...config, providerId: "openai" }, config),
+    ).resolves.toBe(true);
 
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/provider/openai/auth");
@@ -421,7 +417,9 @@ describe("opencode client", () => {
       json: async () => ({ github: { status: "needs_auth" } }),
     } as Response);
 
-    await expect(listOpenCodeMcpServers(config)).resolves.toEqual({ github: { status: "needs_auth" } });
+    await expect(listOpenCodeMcpServers(config)).resolves.toEqual({
+      github: { status: "needs_auth" },
+    });
 
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/mcp");
@@ -432,7 +430,9 @@ describe("opencode client", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [{ name: "review", description: "Review changes", template: "review", hints: [] }],
+        json: async () => [
+          { name: "review", description: "Review changes", template: "review", hints: [] },
+        ],
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
@@ -456,7 +456,9 @@ describe("opencode client", () => {
       json: async () => ({ authorizationUrl: "https://mcp.example/auth" }),
     } as Response);
 
-    await expect(startOpenCodeMcpAuth({ ...config, serverName: "github" }, config)).resolves.toEqual({
+    await expect(
+      startOpenCodeMcpAuth({ ...config, serverName: "github" }, config),
+    ).resolves.toEqual({
       authorizationUrl: "https://mcp.example/auth",
     });
 
@@ -485,7 +487,9 @@ describe("opencode client", () => {
       json: async () => ({ status: "connected" }),
     } as Response);
 
-    await expect(authenticateOpenCodeMcp({ ...config, serverName: "github" }, config)).resolves.toEqual({
+    await expect(
+      authenticateOpenCodeMcp({ ...config, serverName: "github" }, config),
+    ).resolves.toEqual({
       status: "connected",
     });
 
@@ -499,7 +503,9 @@ describe("opencode client", () => {
       json: async () => ({ success: true }),
     } as Response);
 
-    await expect(removeOpenCodeMcpAuth({ ...config, serverName: "github" }, config)).resolves.toBe(true);
+    await expect(removeOpenCodeMcpAuth({ ...config, serverName: "github" }, config)).resolves.toBe(
+      true,
+    );
 
     const call = fetchMock.mock.calls[0];
     expect(call?.[0]).toBe("http://127.0.0.1:4096/mcp/github/auth");
@@ -512,8 +518,12 @@ describe("opencode client", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => true } as Response)
       .mockResolvedValueOnce({ ok: true, json: async () => true } as Response);
 
-    await expect(connectOpenCodeMcp({ ...config, serverName: "github" }, config)).resolves.toBe(true);
-    await expect(disconnectOpenCodeMcp({ ...config, serverName: "github" }, config)).resolves.toBe(true);
+    await expect(connectOpenCodeMcp({ ...config, serverName: "github" }, config)).resolves.toBe(
+      true,
+    );
+    await expect(disconnectOpenCodeMcp({ ...config, serverName: "github" }, config)).resolves.toBe(
+      true,
+    );
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:4096/mcp/github/connect");
     expect(fetchMock.mock.calls[1]?.[0]).toBe("http://127.0.0.1:4096/mcp/github/disconnect");
@@ -525,7 +535,12 @@ describe("opencode client", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          info: { id: "message-1", sessionID: "session-1", role: "assistant", time: { created: 1 } },
+          info: {
+            id: "message-1",
+            sessionID: "session-1",
+            role: "assistant",
+            time: { created: 1 },
+          },
           parts: [],
         }),
       } as Response)
@@ -543,7 +558,12 @@ describe("opencode client", () => {
 
     await expect(
       summarizeOpenCodeSession(
-        { ...config, sessionId: "session-1", providerID: "anthropic", modelID: "claude-3-7-sonnet" },
+        {
+          ...config,
+          sessionId: "session-1",
+          providerID: "anthropic",
+          modelID: "claude-3-7-sonnet",
+        },
         config,
       ),
     ).resolves.toBe(true);

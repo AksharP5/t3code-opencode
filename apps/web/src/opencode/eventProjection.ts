@@ -28,7 +28,9 @@ export function applyOpenCodeEventToQueryCache(
   if (type === "message.updated") {
     const info = getMessageInfo(event);
     if (info) {
-      updateMessageQueries(queryClient, info.sessionID, (messages) => upsertMessageInfo(messages, info));
+      updateMessageQueries(queryClient, info.sessionID, (messages) =>
+        upsertMessageInfo(messages, info),
+      );
       return Promise.resolve();
     }
   }
@@ -48,7 +50,9 @@ export function applyOpenCodeEventToQueryCache(
   if (type === "message.part.updated") {
     const part = getMessagePart(event);
     if (part?.sessionID && part.messageID) {
-      updateMessageQueries(queryClient, part.sessionID, (messages) => upsertMessagePart(messages, part));
+      updateMessageQueries(queryClient, part.sessionID, (messages) =>
+        upsertMessagePart(messages, part),
+      );
       return Promise.resolve();
     }
   }
@@ -121,7 +125,9 @@ export function applyOpenCodeEventToQueryCache(
   if (type === "permission.asked") {
     const request = asPermissionRequest(event.payload.properties);
     if (request) {
-      updatePermissionsQueries(queryClient, (requests) => upsertPermissionRequest(requests, request));
+      updatePermissionsQueries(queryClient, (requests) =>
+        upsertPermissionRequest(requests, request),
+      );
       return Promise.resolve();
     }
   }
@@ -243,7 +249,10 @@ function getOpenCodeEventSessionId(event: OpenCodeEvent): string | null {
   return null;
 }
 
-function invalidateOpenCodeSessionQueries(queryClient: QueryClient, sessionId: string): Promise<void> {
+function invalidateOpenCodeSessionQueries(
+  queryClient: QueryClient,
+  sessionId: string,
+): Promise<void> {
   return Promise.all([
     queryClient.invalidateQueries({
       queryKey: ["opencode", "session"],
@@ -271,10 +280,7 @@ function updateMessageQueries(
   }
 }
 
-function updateSessionListQueries(
-  queryClient: QueryClient,
-  session: OpenCodeSessionSummary,
-) {
+function updateSessionListQueries(queryClient: QueryClient, session: OpenCodeSessionSummary) {
   for (const [queryKey, data] of queryClient.getQueriesData<OpenCodeSessionSummary[]>({
     queryKey: ["opencode", "sessions"],
   })) {
@@ -412,7 +418,10 @@ function upsertSessionSummary(
   return next;
 }
 
-function upsertMessageInfo(messages: OpenCodeMessage[], info: OpenCodeMessageInfo): OpenCodeMessage[] {
+function upsertMessageInfo(
+  messages: OpenCodeMessage[],
+  info: OpenCodeMessageInfo,
+): OpenCodeMessage[] {
   const existingIndex = messages.findIndex((message) => message.info.id === info.id);
   if (existingIndex === -1) {
     return [...messages, { info, parts: [] }].toSorted(sortMessages);
@@ -432,7 +441,10 @@ function upsertMessageInfo(messages: OpenCodeMessage[], info: OpenCodeMessageInf
   return next;
 }
 
-function upsertMessagePart(messages: OpenCodeMessage[], part: OpenCodeMessagePart): OpenCodeMessage[] {
+function upsertMessagePart(
+  messages: OpenCodeMessage[],
+  part: OpenCodeMessagePart,
+): OpenCodeMessage[] {
   return messages.map((message) => {
     if (message.info.id !== part.messageID) {
       return message;

@@ -9,16 +9,54 @@ import {
   type RuntimeMode,
 } from "@t3tools/contracts";
 import { normalizeModelSlug } from "@t3tools/shared/model";
-import {
-  DEFAULT_INTERACTION_MODE,
-  DEFAULT_RUNTIME_MODE,
-  type ChatImageAttachment,
-} from "./types";
+import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type ChatImageAttachment } from "./types";
+import { Debouncer } from "@tanstack/react-pacer";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 
 export const COMPOSER_DRAFT_STORAGE_KEY = "t3code:composer-drafts:v1";
 export type DraftThreadEnvMode = "local" | "worktree";
+
+const COMPOSER_PERSIST_DEBOUNCE_MS = 300;
+
+interface DebouncedStorage extends StateStorage {
+  flush: () => void;
+}
+
+export function createDebouncedStorage(baseStorage: StateStorage): DebouncedStorage {
+  const debouncedSetItem = new Debouncer(
+    (name: string, value: string) => {
+      baseStorage.setItem(name, value);
+    },
+    { wait: COMPOSER_PERSIST_DEBOUNCE_MS },
+  );
+
+  return {
+    getItem: (name) => baseStorage.getItem(name),
+    setItem: (name, value) => {
+      debouncedSetItem.maybeExecute(name, value);
+    },
+    removeItem: (name) => {
+      debouncedSetItem.cancel();
+      baseStorage.removeItem(name);
+    },
+    flush: () => {
+      debouncedSetItem.flush();
+    },
+  };
+}
+
+const composerDebouncedStorage: DebouncedStorage =
+  typeof localStorage !== "undefined"
+    ? createDebouncedStorage(localStorage)
+    : { getItem: () => null, setItem: () => {}, removeItem: () => {}, flush: () => {} };
+
+// Flush pending composer draft writes before page unload to prevent data loss.
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    composerDebouncedStorage.flush();
+  });
+}
 
 export interface PersistedComposerImageAttachment {
   id: string;
@@ -324,7 +362,10 @@ function normalizePersistedComposerDraftState(value: unknown): PersistedComposer
         branch: typeof branch === "string" ? branch : null,
         worktreePath: normalizedWorktreePath,
         envMode: normalizeDraftThreadEnvMode(candidateDraftThread.envMode, normalizedWorktreePath),
-        forkSessionId: typeof forkSessionId === "string" && forkSessionId.length > 0 ? (forkSessionId as ThreadId) : null,
+        forkSessionId:
+          typeof forkSessionId === "string" && forkSessionId.length > 0
+            ? (forkSessionId as ThreadId)
+            : null,
       };
     }
   }
@@ -350,11 +391,11 @@ function normalizePersistedComposerDraftState(value: unknown): PersistedComposer
             createdAt: new Date().toISOString(),
             runtimeMode: DEFAULT_RUNTIME_MODE,
             interactionMode: DEFAULT_INTERACTION_MODE,
-             branch: null,
-             worktreePath: null,
-             envMode: "local",
-             forkSessionId: null,
-           };
+            branch: null,
+            worktreePath: null,
+            envMode: "local",
+            forkSessionId: null,
+          };
         } else if (draftThreadsByThreadId[threadId as ThreadId]?.projectId !== projectId) {
           draftThreadsByThreadId[threadId as ThreadId] = {
             ...draftThreadsByThreadId[threadId as ThreadId]!,
@@ -384,9 +425,10 @@ function normalizePersistedComposerDraftState(value: unknown): PersistedComposer
         })
       : [];
     const provider = normalizeProviderKind(draftCandidate.provider);
-    const agent = typeof draftCandidate.agent === "string" && draftCandidate.agent.trim().length > 0
-      ? draftCandidate.agent.trim()
-      : null;
+    const agent =
+      typeof draftCandidate.agent === "string" && draftCandidate.agent.trim().length > 0
+        ? draftCandidate.agent.trim()
+        : null;
     const model =
       typeof draftCandidate.model === "string"
         ? normalizeModelSlug(draftCandidate.model, provider ?? "codex")
@@ -475,8 +517,7 @@ function hydreatePersistedComposerImageAttachment(
   attachment: PersistedComposerImageAttachment,
 ): File | null {
   const commaIndex = attachment.dataUrl.indexOf(",");
-  const header =
-    commaIndex === -1 ? attachment.dataUrl : attachment.dataUrl.slice(0, commaIndex);
+  const header = commaIndex === -1 ? attachment.dataUrl : attachment.dataUrl.slice(0, commaIndex);
   const payload = commaIndex === -1 ? "" : attachment.dataUrl.slice(commaIndex + 1);
   if (payload.length === 0) {
     return null;
@@ -586,7 +627,8 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
           const nextDraftThread: DraftThreadState = {
             projectId,
             createdAt: options?.createdAt ?? existingThread?.createdAt ?? new Date().toISOString(),
-            runtimeMode: options?.runtimeMode ?? existingThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+            runtimeMode:
+              options?.runtimeMode ?? existingThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
             interactionMode:
               options?.interactionMode ??
               existingThread?.interactionMode ??
@@ -659,7 +701,9 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
             return state;
           }
           const nextWorktreePath =
-            options.worktreePath === undefined ? existing.worktreePath : (options.worktreePath ?? null);
+            options.worktreePath === undefined
+              ? existing.worktreePath
+              : (options.worktreePath ?? null);
           const nextDraftThread: DraftThreadState = {
             projectId: nextProjectId,
             createdAt:
@@ -671,8 +715,7 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
             branch: options.branch === undefined ? existing.branch : (options.branch ?? null),
             worktreePath: nextWorktreePath,
             envMode:
-              options.envMode ??
-              (nextWorktreePath ? "worktree" : (existing.envMode ?? "local")),
+              options.envMode ?? (nextWorktreePath ? "worktree" : (existing.envMode ?? "local")),
             forkSessionId:
               options.forkSessionId === undefined
                 ? (existing.forkSessionId ?? null)
@@ -842,7 +885,8 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
         if (threadId.length === 0) {
           return;
         }
-        const normalizedAgent = typeof agent === "string" && agent.trim().length > 0 ? agent.trim() : null;
+        const normalizedAgent =
+          typeof agent === "string" && agent.trim().length > 0 ? agent.trim() : null;
         set((state) => {
           const existing = state.draftsByThreadId[threadId];
           if (!existing && normalizedAgent === null) {
@@ -1229,7 +1273,7 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
     {
       name: COMPOSER_DRAFT_STORAGE_KEY,
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => composerDebouncedStorage),
       partialize: (state) => {
         const persistedDraftsByThreadId: PersistedComposerDraftStoreState["draftsByThreadId"] = {};
         for (const [threadId, draft] of Object.entries(state.draftsByThreadId)) {
@@ -1303,4 +1347,21 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
 
 export function useComposerThreadDraft(threadId: ThreadId): ComposerThreadDraftState {
   return useComposerDraftStore((state) => state.draftsByThreadId[threadId] ?? EMPTY_THREAD_DRAFT);
+}
+
+/**
+ * Clear draft threads that have been promoted to server threads.
+ *
+ * Call this after a snapshot sync so the route guard in `_chat.$threadId`
+ * sees the server thread before the draft is removed — avoids a redirect
+ * to `/` caused by a gap where neither draft nor server thread exists.
+ */
+export function clearPromotedDraftThreads(serverThreadIds: ReadonlySet<ThreadId>): void {
+  const store = useComposerDraftStore.getState();
+  const draftThreadIds = Object.keys(store.draftThreadsByThreadId) as ThreadId[];
+  for (const draftId of draftThreadIds) {
+    if (serverThreadIds.has(draftId)) {
+      store.clearDraftThread(draftId);
+    }
+  }
 }

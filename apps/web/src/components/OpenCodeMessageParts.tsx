@@ -77,7 +77,9 @@ export default function OpenCodeMessageParts(props: {
                 <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
                   Tool
                 </p>
-                <span className="text-[10px] text-muted-foreground/60">{toolState?.status ?? "unknown"}</span>
+                <span className="text-[10px] text-muted-foreground/60">
+                  {toolState?.status ?? "unknown"}
+                </span>
               </div>
               <p className="mt-1 font-mono text-xs text-foreground">{part.tool ?? "unknown"}</p>
               {toolState?.detail ? (
@@ -96,9 +98,16 @@ export default function OpenCodeMessageParts(props: {
               )
             : [];
           return (
-            <div key={key} className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">Patch</p>
-              <p className="mt-1 text-foreground">Applied changes to {files.length || 1} file(s).</p>
+            <div
+              key={key}
+              className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs"
+            >
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                Patch
+              </p>
+              <p className="mt-1 text-foreground">
+                Applied changes to {files.length || 1} file(s).
+              </p>
               {files.length > 0 ? (
                 <pre className="mt-2 whitespace-pre-wrap break-words rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
                   {files.join("\n")}
@@ -114,8 +123,13 @@ export default function OpenCodeMessageParts(props: {
             (typeof part.metadata === "string" ? part.metadata : undefined) ??
             "Attachment";
           return (
-            <div key={key} className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-foreground">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">File</p>
+            <div
+              key={key}
+              className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-foreground"
+            >
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                File
+              </p>
               <p className="mt-1 break-all">{label}</p>
             </div>
           );
@@ -123,11 +137,17 @@ export default function OpenCodeMessageParts(props: {
 
         if (part.type === "subtask") {
           const metadata = isRecord(part.metadata) ? part.metadata : null;
-          const description = typeof metadata?.description === "string" ? metadata.description : null;
+          const description =
+            typeof metadata?.description === "string" ? metadata.description : null;
           const agent = typeof metadata?.agent === "string" ? metadata.agent : null;
           return (
-            <div key={key} className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-foreground">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">Subtask</p>
+            <div
+              key={key}
+              className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-foreground"
+            >
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                Subtask
+              </p>
               {description ? <p className="mt-1">{description}</p> : null}
               {agent ? <p className="mt-1 text-muted-foreground">Agent: {agent}</p> : null}
             </div>
@@ -136,7 +156,10 @@ export default function OpenCodeMessageParts(props: {
 
         if (part.type === "retry") {
           return (
-            <div key={key} className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
+            <div
+              key={key}
+              className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs"
+            >
               <p className="text-[10px] uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300/80">
                 Retry
               </p>
@@ -149,7 +172,10 @@ export default function OpenCodeMessageParts(props: {
 
         if (part.type === "snapshot") {
           return (
-            <details key={key} className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs">
+            <details
+              key={key}
+              className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs"
+            >
               <summary className="cursor-pointer text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
                 Snapshot
               </summary>
@@ -161,10 +187,16 @@ export default function OpenCodeMessageParts(props: {
         }
 
         if (part.type === "agent") {
-          const label = typeof part.metadata === "string" ? part.metadata : part.text ?? "Agent updated";
+          const label =
+            typeof part.metadata === "string" ? part.metadata : (part.text ?? "Agent updated");
           return (
-            <div key={key} className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-foreground">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">Agent</p>
+            <div
+              key={key}
+              className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-foreground"
+            >
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                Agent
+              </p>
               <p className="mt-1">{label}</p>
             </div>
           );
@@ -172,7 +204,10 @@ export default function OpenCodeMessageParts(props: {
 
         if (part.type === "compaction") {
           return (
-            <div key={key} className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-muted-foreground">
+            <div
+              key={key}
+              className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-muted-foreground"
+            >
               Conversation context was compacted.
             </div>
           );
@@ -180,14 +215,20 @@ export default function OpenCodeMessageParts(props: {
 
         if (part.type === "step-start" || part.type === "step-finish") {
           return (
-            <div key={key} className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-muted-foreground">
+            <div
+              key={key}
+              className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs text-muted-foreground"
+            >
               {part.type === "step-start" ? "Started a step." : "Completed a step."}
             </div>
           );
         }
 
         return (
-          <details key={key} className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs">
+          <details
+            key={key}
+            className="rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs"
+          >
             <summary className="cursor-pointer text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
               {part.type}
             </summary>

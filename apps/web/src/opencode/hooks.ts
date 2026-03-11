@@ -100,7 +100,10 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     ...opencodeDiffQueryOptions({ ...config, sessionId: threadId ?? "missing" }),
     enabled: statusQuery.data?.healthy === true && threadId !== undefined,
   });
-  const agentCatalog = useMemo(() => buildOpenCodeAgentCatalog(agentsQuery.data), [agentsQuery.data]);
+  const agentCatalog = useMemo(
+    () => buildOpenCodeAgentCatalog(agentsQuery.data),
+    [agentsQuery.data],
+  );
 
   const projects = useMemo<Project[]>(() => {
     return mapOpenCodeProjects({
@@ -112,17 +115,19 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
 
   const threads = useMemo<Thread[]>(() => {
     return (sessionsQuery.data ?? []).map((session) =>
-        mapOpenCodeThreadSummary({
-          session,
-          projectId: resolveProjectIdForSession(session, projects),
-          projectCwd: projects.find((project) => project.id === resolveProjectIdForSession(session, projects))?.cwd,
-          status: statusesQuery.data?.[session.id],
-          lastVisitedAt: lastVisitedAtByThreadId[ThreadId.makeUnsafe(session.id)],
-          providerCatalog: providersQuery.data,
-          agentCatalog,
-          activities: activitiesByThreadId[ThreadId.makeUnsafe(session.id)] ?? [],
-        }),
-      );
+      mapOpenCodeThreadSummary({
+        session,
+        projectId: resolveProjectIdForSession(session, projects),
+        projectCwd: projects.find(
+          (project) => project.id === resolveProjectIdForSession(session, projects),
+        )?.cwd,
+        status: statusesQuery.data?.[session.id],
+        lastVisitedAt: lastVisitedAtByThreadId[ThreadId.makeUnsafe(session.id)],
+        providerCatalog: providersQuery.data,
+        agentCatalog,
+        activities: activitiesByThreadId[ThreadId.makeUnsafe(session.id)] ?? [],
+      }),
+    );
   }, [
     activitiesByThreadId,
     agentCatalog,
@@ -141,7 +146,8 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
   }, [projects, sessionQuery.data, threadId, threads]);
 
   const activeProject = useMemo(
-    () => (activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null),
+    () =>
+      activeProjectId ? (projects.find((project) => project.id === activeProjectId) ?? null) : null,
     [activeProjectId, projects],
   );
   const activeSessionDirectory = useMemo(() => {
@@ -199,7 +205,7 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     threadId === undefined
       ? null
       : ((sessionQuery.error instanceof Error ? sessionQuery.error.message : null) ??
-          (messagesQuery.error instanceof Error ? messagesQuery.error.message : null));
+        (messagesQuery.error instanceof Error ? messagesQuery.error.message : null));
 
   const activeThreadWithDiff = useMemo(() => {
     const activeDiff = diffQuery.data ?? [];
@@ -213,7 +219,9 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     }
 
     const completedAt =
-      activeThread.latestTurn.completedAt ?? activeThread.latestTurn.startedAt ?? activeThread.createdAt;
+      activeThread.latestTurn.completedAt ??
+      activeThread.latestTurn.startedAt ??
+      activeThread.createdAt;
     const summary: TurnDiffSummary = {
       turnId: activeThread.latestTurn.turnId,
       completedAt,

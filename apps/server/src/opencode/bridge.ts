@@ -87,7 +87,11 @@ import {
   unshareOpenCodeSession,
   updateOpenCodeSession,
 } from "./client";
-import { isLoopbackOpenCodeUrl, resolveOpenCodeConfig, type ResolvedOpenCodeConfig } from "./config";
+import {
+  isLoopbackOpenCodeUrl,
+  resolveOpenCodeConfig,
+  type ResolvedOpenCodeConfig,
+} from "./config";
 
 const OPENCODE_BOOT_TIMEOUT_MS = 20_000;
 const OPENCODE_EVENT_RETRY_MS = 1_000;
@@ -383,7 +387,11 @@ export class OpenCodeBridge {
   }
 
   private async ensureStarted(config: ResolvedOpenCodeConfig): Promise<void> {
-    if (this.serverProcess && this.serverProcess.exitCode === null && this.serverProcessUrl === config.baseUrl) {
+    if (
+      this.serverProcess &&
+      this.serverProcess.exitCode === null &&
+      this.serverProcessUrl === config.baseUrl
+    ) {
       await this.waitForHealth(config, OPENCODE_BOOT_TIMEOUT_MS);
       return;
     }
@@ -393,10 +401,14 @@ export class OpenCodeBridge {
     this.serverOutput = "";
     const url = new URL(config.baseUrl);
     const port = url.port.length > 0 ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
-    const serverProcess = spawn("opencode", ["serve", `--hostname=${url.hostname}`, `--port=${port}`], {
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const serverProcess = spawn(
+      "opencode",
+      ["serve", `--hostname=${url.hostname}`, `--port=${port}`],
+      {
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     this.serverProcess = serverProcess;
     this.serverProcessUrl = config.baseUrl;
     serverProcess.stdout.on("data", (chunk: Buffer | string) => {

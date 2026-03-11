@@ -21,7 +21,8 @@ export const opencodeQueryKeys = {
   all: ["opencode"] as const,
   status: (input: OpenCodeListProjectsInput) => ["opencode", "status", input] as const,
   providers: (input: OpenCodeListProvidersInput) => ["opencode", "providers", input] as const,
-  providerAuthMethods: (input: OpenCodeListProviderAuthMethodsInput) => ["opencode", "providerAuthMethods", input] as const,
+  providerAuthMethods: (input: OpenCodeListProviderAuthMethodsInput) =>
+    ["opencode", "providerAuthMethods", input] as const,
   mcpServers: (input: OpenCodeListMcpServersInput) => ["opencode", "mcpServers", input] as const,
   commands: (input: OpenCodeListCommandsInput) => ["opencode", "commands", input] as const,
   resources: (input: OpenCodeListResourcesInput) => ["opencode", "resources", input] as const,
@@ -75,7 +76,9 @@ export function opencodeProvidersQueryOptions(input: OpenCodeListProvidersInput)
   });
 }
 
-export function opencodeProviderAuthMethodsQueryOptions(input: OpenCodeListProviderAuthMethodsInput) {
+export function opencodeProviderAuthMethodsQueryOptions(
+  input: OpenCodeListProviderAuthMethodsInput,
+) {
   return queryOptions({
     queryKey: opencodeQueryKeys.providerAuthMethods(input),
     queryFn: async () => ensureNativeApi().opencode.listProviderAuthMethods(input),

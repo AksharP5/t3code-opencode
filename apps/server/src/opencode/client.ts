@@ -74,7 +74,9 @@ import { getOpenCodeAuthHeader, type ResolvedOpenCodeConfig } from "./config";
 const decodeProjects = Schema.decodeUnknownSync(Schema.Array(OpenCodeProjectSchema));
 const decodeAgents = Schema.decodeUnknownSync(Schema.Array(OpenCodeAgentSchema));
 const decodeCommands = Schema.decodeUnknownSync(Schema.Array(OpenCodeCommandSchema));
-const decodeResources = Schema.decodeUnknownSync(Schema.Record(Schema.String, OpenCodeMcpResourceSchema));
+const decodeResources = Schema.decodeUnknownSync(
+  Schema.Record(Schema.String, OpenCodeMcpResourceSchema),
+);
 const decodeProviderCatalog = Schema.decodeUnknownSync(OpenCodeProviderCatalogSchema);
 const decodeSessions = Schema.decodeUnknownSync(Schema.Array(OpenCodeSessionSummarySchema));
 const decodeSession = Schema.decodeUnknownSync(OpenCodeSessionSchema);
@@ -114,7 +116,9 @@ export async function fetchOpenCodeHealth(config: ResolvedOpenCodeConfig): Promi
   };
 }
 
-export async function listOpenCodeProjects(config: ResolvedOpenCodeConfig): Promise<OpenCodeProject[]> {
+export async function listOpenCodeProjects(
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeProject[]> {
   const response = await fetch(`${config.baseUrl}/project`, {
     headers: buildHeaders(config),
   });
@@ -146,7 +150,9 @@ export async function listOpenCodeProviderAuthMethods(
     throw new Error(`OpenCode provider auth methods failed with ${response.status}.`);
   }
   const methods = decodeProviderAuthMethods(await response.json());
-  return Object.fromEntries(Object.entries(methods).map(([providerId, entries]) => [providerId, Array.from(entries)]));
+  return Object.fromEntries(
+    Object.entries(methods).map(([providerId, entries]) => [providerId, Array.from(entries)]),
+  );
 }
 
 export async function authorizeOpenCodeProvider(
@@ -265,10 +271,13 @@ export async function startOpenCodeMcpAuth(
   input: OpenCodeStartMcpAuthInput,
   config: ResolvedOpenCodeConfig,
 ): Promise<OpenCodeMcpAuthStartResult> {
-  const response = await fetch(`${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/auth`, {
-    method: "POST",
-    headers: buildHeaders(config),
-  });
+  const response = await fetch(
+    `${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/auth`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+    },
+  );
   if (!response.ok) {
     throw new Error(`OpenCode MCP auth start failed with ${response.status}.`);
   }
@@ -314,10 +323,13 @@ export async function removeOpenCodeMcpAuth(
   input: OpenCodeRemoveMcpAuthInput,
   config: ResolvedOpenCodeConfig,
 ): Promise<boolean> {
-  const response = await fetch(`${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/auth`, {
-    method: "DELETE",
-    headers: buildHeaders(config),
-  });
+  const response = await fetch(
+    `${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/auth`,
+    {
+      method: "DELETE",
+      headers: buildHeaders(config),
+    },
+  );
   if (!response.ok) {
     throw new Error(`OpenCode MCP auth removal failed with ${response.status}.`);
   }
@@ -328,10 +340,13 @@ export async function connectOpenCodeMcp(
   input: OpenCodeConnectMcpInput,
   config: ResolvedOpenCodeConfig,
 ): Promise<boolean> {
-  const response = await fetch(`${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/connect`, {
-    method: "POST",
-    headers: buildHeaders(config),
-  });
+  const response = await fetch(
+    `${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/connect`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+    },
+  );
   if (!response.ok) {
     throw new Error(`OpenCode MCP connect failed with ${response.status}.`);
   }
@@ -342,10 +357,13 @@ export async function disconnectOpenCodeMcp(
   input: OpenCodeDisconnectMcpInput,
   config: ResolvedOpenCodeConfig,
 ): Promise<boolean> {
-  const response = await fetch(`${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/disconnect`, {
-    method: "POST",
-    headers: buildHeaders(config),
-  });
+  const response = await fetch(
+    `${config.baseUrl}/mcp/${encodeURIComponent(input.serverName)}/disconnect`,
+    {
+      method: "POST",
+      headers: buildHeaders(config),
+    },
+  );
   if (!response.ok) {
     throw new Error(`OpenCode MCP disconnect failed with ${response.status}.`);
   }

@@ -144,7 +144,10 @@ export function mapOpenCodeThreadSummary(input: {
     parentThreadId: input.session.parentID ? ThreadId.makeUnsafe(input.session.parentID) : null,
     workspaceId: input.session.workspaceID ?? null,
     branch: null,
-    worktreePath: resolveThreadWorktreePath({ session: input.session, projectCwd: input.projectCwd }),
+    worktreePath: resolveThreadWorktreePath({
+      session: input.session,
+      projectCwd: input.projectCwd,
+    }),
     turnDiffSummaries: [],
     activities: input.activities ?? [],
   };
@@ -261,7 +264,10 @@ function deriveTurnDiffSummaries(messages: OpenCodeMessage[]): Thread["turnDiffS
       return true;
     });
     const completedAt = toIso(
-      assistant?.info.time.completed ?? assistant?.info.time.end ?? assistant?.info.time.created ?? message.info.time.created,
+      assistant?.info.time.completed ??
+        assistant?.info.time.end ??
+        assistant?.info.time.created ??
+        message.info.time.created,
     );
     return [
       {
@@ -297,7 +303,9 @@ function resolveLatestTurn(
       ? toIso(assistant.info.time.start ?? assistant.info.time.created)
       : requestedAt;
     const completedAt = assistant
-      ? toIso(assistant.info.time.completed ?? assistant.info.time.end ?? assistant.info.time.created)
+      ? toIso(
+          assistant.info.time.completed ?? assistant.info.time.end ?? assistant.info.time.created,
+        )
       : null;
 
     if (status?.type === "busy" || status?.type === "retry") {
@@ -344,7 +352,9 @@ function mergeOpenCodeActivities(
   for (const activity of [...derived, ...overlayActivities]) {
     merged.set(activity.id, activity);
   }
-  return [...merged.values()].toSorted((left, right) => left.createdAt.localeCompare(right.createdAt));
+  return [...merged.values()].toSorted((left, right) =>
+    left.createdAt.localeCompare(right.createdAt),
+  );
 }
 
 function deriveMessageActivities(messages: OpenCodeMessage[]): OrchestrationThreadActivity[] {
@@ -403,9 +413,10 @@ function mapPartToActivity(
       kind: "task.completed",
       summary: "Delegated subtask",
       payload: {
-        detail: typeof part.metadata === "object" && part.metadata && "description" in part.metadata
-          ? (part.metadata as { description?: string }).description
-          : undefined,
+        detail:
+          typeof part.metadata === "object" && part.metadata && "description" in part.metadata
+            ? (part.metadata as { description?: string }).description
+            : undefined,
         data: part,
       },
       turnId,
@@ -428,7 +439,8 @@ function isToolError(part: OpenCodeMessagePart): boolean {
 }
 
 function buildToolActivityPayload(part: OpenCodeMessagePart): Record<string, unknown> {
-  const state = part.state && typeof part.state === "object" ? (part.state as Record<string, unknown>) : null;
+  const state =
+    part.state && typeof part.state === "object" ? (part.state as Record<string, unknown>) : null;
   return {
     detail: typeof state?.title === "string" ? state.title : undefined,
     data: {
@@ -496,7 +508,9 @@ export function resolveProjectIdForSession(
 export function buildOpenCodeAgentCatalog(
   agents: OpenCodeAgent[] | null | undefined,
 ): OpenCodeAgentCatalog {
-  const visible = (agents ?? []).filter((agent) => agent.mode !== "subagent" && agent.hidden !== true);
+  const visible = (agents ?? []).filter(
+    (agent) => agent.mode !== "subagent" && agent.hidden !== true,
+  );
   const planAgent = visible.find((agent) => agent.name === "plan")?.name ?? null;
   const defaultAgent =
     visible.find((agent) => agent.name === "build")?.name ??
@@ -606,7 +620,9 @@ function resolveThreadProvider(input: {
   }
   if (input.providerCatalog?.all.length) {
     const connectedProviders = input.providerCatalog.connected
-      .map((providerId) => input.providerCatalog?.all.find((provider) => provider.id === providerId))
+      .map((providerId) =>
+        input.providerCatalog?.all.find((provider) => provider.id === providerId),
+      )
       .filter((provider): provider is NonNullable<typeof provider> => provider !== undefined);
     if (connectedProviders.length === 1) {
       const connectedProvider = connectedProviders[0];

@@ -81,7 +81,9 @@ describe("applyOpenCodeEventToQueryCache", () => {
       }),
     );
 
-    expect(queryClient.getQueryData<OpenCodeMessage[]>(queryKey)?.[0]?.parts[0]?.text).toBe("Hello");
+    expect(queryClient.getQueryData<OpenCodeMessage[]>(queryKey)?.[0]?.parts[0]?.text).toBe(
+      "Hello",
+    );
   });
 
   it("tracks permission asks and replies without a refetch", async () => {
@@ -279,11 +281,15 @@ describe("applyOpenCodeEventToQueryCache", () => {
       }),
     );
 
-    expect(queryClient.getQueryData<Record<string, OpenCodeRuntimeStatus>>(statusesKey)?.["session-1"]).toEqual({
+    expect(
+      queryClient.getQueryData<Record<string, OpenCodeRuntimeStatus>>(statusesKey)?.["session-1"],
+    ).toEqual({
       type: "busy",
     });
     expect(queryClient.getQueryData<OpenCodeSession>(sessionKey)?.title).toBe("Updated title");
-    expect(queryClient.getQueryData<OpenCodeSession[]>(sessionsKey)?.[0]?.title).toBe("Updated title");
+    expect(queryClient.getQueryData<OpenCodeSession[]>(sessionsKey)?.[0]?.title).toBe(
+      "Updated title",
+    );
     expect(queryClient.getQueryData<{ branch: string | null }>(vcsKey)).toEqual({
       branch: "feature/opencode",
     });

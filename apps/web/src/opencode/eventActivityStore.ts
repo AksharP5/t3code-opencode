@@ -106,7 +106,8 @@ function projectActivity(event: OpenCodeEvent): {
     if (!requestId || !permission) {
       return null;
     }
-    const pattern = firstString(properties?.patterns) ?? firstString(properties?.always) ?? "this action";
+    const pattern =
+      firstString(properties?.patterns) ?? firstString(properties?.always) ?? "this action";
     return buildActivity(sessionId, {
       tone: "approval",
       kind: "approval.requested",
@@ -170,7 +171,9 @@ function projectActivity(event: OpenCodeEvent): {
   if (event.payload.type === "session.error") {
     const error = asRecord(properties?.error);
     const detail =
-      asString(error?.message) ?? asString(error?.name) ?? "OpenCode reported an error for this session.";
+      asString(error?.message) ??
+      asString(error?.name) ??
+      "OpenCode reported an error for this session.";
     return buildActivity(sessionId, {
       tone: "error",
       kind: "session.error",

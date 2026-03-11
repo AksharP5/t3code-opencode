@@ -23,6 +23,7 @@ import { preferredTerminalEditor } from "../terminal-links";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
+import { APP_VERSION } from "../branding";
 import { SidebarInset } from "~/components/ui/sidebar";
 
 const THEME_OPTIONS = [
@@ -107,11 +108,13 @@ function SettingsRouteView() {
   >({});
   const [providerApiKeyById, setProviderApiKeyById] = useState<Record<string, string>>({});
   const [providerOauthCodeById, setProviderOauthCodeById] = useState<Record<string, string>>({});
-  const [providerAuthErrorById, setProviderAuthErrorById] = useState<Record<string, string | null>>({});
-  const [providerAuthPendingId, setProviderAuthPendingId] = useState<string | null>(null);
-  const [providerPendingOauthMethodById, setProviderPendingOauthMethodById] = useState<Record<string, number>>(
+  const [providerAuthErrorById, setProviderAuthErrorById] = useState<Record<string, string | null>>(
     {},
   );
+  const [providerAuthPendingId, setProviderAuthPendingId] = useState<string | null>(null);
+  const [providerPendingOauthMethodById, setProviderPendingOauthMethodById] = useState<
+    Record<string, number>
+  >({});
   const [mcpAuthCodeByName, setMcpAuthCodeByName] = useState<Record<string, string>>({});
   const [mcpAuthStartUrlByName, setMcpAuthStartUrlByName] = useState<Record<string, string>>({});
   const [mcpAuthErrorByName, setMcpAuthErrorByName] = useState<Record<string, string | null>>({});
@@ -262,7 +265,10 @@ function SettingsRouteView() {
             refreshOpenCodeProviderQueries();
             return;
           }
-          setProviderPendingOauthMethodById((existing) => ({ ...existing, [providerId]: methodIndex }));
+          setProviderPendingOauthMethodById((existing) => ({
+            ...existing,
+            [providerId]: methodIndex,
+          }));
           setProviderAuthErrorById((existing) => ({
             ...existing,
             [providerId]: authorization.instructions,
@@ -313,14 +319,20 @@ function SettingsRouteView() {
         .catch((error: unknown) => {
           setProviderAuthErrorById((existing) => ({
             ...existing,
-            [providerId]: error instanceof Error ? error.message : "Failed to complete provider auth.",
+            [providerId]:
+              error instanceof Error ? error.message : "Failed to complete provider auth.",
           }));
         })
         .finally(() => {
           setProviderAuthPendingId(null);
         });
     },
-    [openCodeConfig, providerOauthCodeById, providerPendingOauthMethodById, refreshOpenCodeProviderQueries],
+    [
+      openCodeConfig,
+      providerOauthCodeById,
+      providerPendingOauthMethodById,
+      refreshOpenCodeProviderQueries,
+    ],
   );
 
   const disconnectOpenCodeProvider = useCallback(
@@ -358,7 +370,10 @@ function SettingsRouteView() {
           serverName,
         })
         .then(async (result) => {
-          setMcpAuthStartUrlByName((existing) => ({ ...existing, [serverName]: result.authorizationUrl }));
+          setMcpAuthStartUrlByName((existing) => ({
+            ...existing,
+            [serverName]: result.authorizationUrl,
+          }));
           await ensureNativeApi().shell.openExternal(result.authorizationUrl);
         })
         .catch((error: unknown) => {
@@ -424,7 +439,8 @@ function SettingsRouteView() {
         .catch((error: unknown) => {
           setMcpAuthErrorByName((existing) => ({
             ...existing,
-            [serverName]: error instanceof Error ? error.message : "Failed to authenticate MCP server.",
+            [serverName]:
+              error instanceof Error ? error.message : "Failed to authenticate MCP server.",
           }));
         })
         .finally(() => {
@@ -474,7 +490,8 @@ function SettingsRouteView() {
         .catch((error: unknown) => {
           setMcpAuthErrorByName((existing) => ({
             ...existing,
-            [serverName]: error instanceof Error ? error.message : "Failed to update MCP connection.",
+            [serverName]:
+              error instanceof Error ? error.message : "Failed to update MCP connection.",
           }));
         })
         .finally(() => {
@@ -484,54 +501,61 @@ function SettingsRouteView() {
     [openCodeConfig, refreshOpenCodeMcpQuery],
   );
 
-  const addCustomModel = useCallback((provider: ProviderKind) => {
-    const customModelInput = customModelInputByProvider[provider];
-    const customModels = getCustomModelsForProvider(settings, provider);
-    const normalized = normalizeModelSlug(customModelInput, provider);
-    if (!normalized) {
+  const addCustomModel = useCallback(
+    (provider: ProviderKind) => {
+      const customModelInput = customModelInputByProvider[provider];
+      const customModels = getCustomModelsForProvider(settings, provider);
+      const normalized = normalizeModelSlug(customModelInput, provider);
+      if (!normalized) {
+        setCustomModelErrorByProvider((existing) => ({
+          ...existing,
+          [provider]: "Enter a model slug.",
+        }));
+        return;
+      }
+      if (getModelOptions(provider).some((option) => option.slug === normalized)) {
+        setCustomModelErrorByProvider((existing) => ({
+          ...existing,
+          [provider]: "That model is already built in.",
+        }));
+        return;
+      }
+      if (normalized.length > MAX_CUSTOM_MODEL_LENGTH) {
+        setCustomModelErrorByProvider((existing) => ({
+          ...existing,
+          [provider]: `Model slugs must be ${MAX_CUSTOM_MODEL_LENGTH} characters or less.`,
+        }));
+        return;
+      }
+      if (customModels.includes(normalized)) {
+        setCustomModelErrorByProvider((existing) => ({
+          ...existing,
+          [provider]: "That custom model is already saved.",
+        }));
+        return;
+      }
+      updateSettings(patchCustomModels(provider, [...customModels, normalized]));
+      setCustomModelInputByProvider((existing) => ({
+        ...existing,
+        [provider]: "",
+      }));
       setCustomModelErrorByProvider((existing) => ({
         ...existing,
-        [provider]: "Enter a model slug.",
+        [provider]: null,
       }));
-      return;
-    }
-    if (getModelOptions(provider).some((option) => option.slug === normalized)) {
-      setCustomModelErrorByProvider((existing) => ({
-        ...existing,
-        [provider]: "That model is already built in.",
-      }));
-      return;
-    }
-    if (normalized.length > MAX_CUSTOM_MODEL_LENGTH) {
-      setCustomModelErrorByProvider((existing) => ({
-        ...existing,
-        [provider]: `Model slugs must be ${MAX_CUSTOM_MODEL_LENGTH} characters or less.`,
-      }));
-      return;
-    }
-    if (customModels.includes(normalized)) {
-      setCustomModelErrorByProvider((existing) => ({
-        ...existing,
-        [provider]: "That custom model is already saved.",
-      }));
-      return;
-    }
-
-    updateSettings(patchCustomModels(provider, [...customModels, normalized]));
-    setCustomModelInputByProvider((existing) => ({
-      ...existing,
-      [provider]: "",
-    }));
-    setCustomModelErrorByProvider((existing) => ({
-      ...existing,
-      [provider]: null,
-    }));
-  }, [customModelInputByProvider, settings, updateSettings]);
+    },
+    [customModelInputByProvider, settings, updateSettings],
+  );
 
   const removeCustomModel = useCallback(
     (provider: ProviderKind, slug: string) => {
       const customModels = getCustomModelsForProvider(settings, provider);
-      updateSettings(patchCustomModels(provider, customModels.filter((model) => model !== slug)));
+      updateSettings(
+        patchCustomModels(
+          provider,
+          customModels.filter((model) => model !== slug),
+        ),
+      );
       setCustomModelErrorByProvider((existing) => ({
         ...existing,
         [provider]: null,
@@ -620,7 +644,8 @@ function SettingsRouteView() {
                       <p className="mt-1 text-xs text-muted-foreground">
                         {openCodeStatusQuery.isPending
                           ? "Checking OpenCode server..."
-                          : openCodeStatusQuery.data?.state === "ready" && openCodeStatusQuery.data.healthy
+                          : openCodeStatusQuery.data?.state === "ready" &&
+                              openCodeStatusQuery.data.healthy
                             ? "Connected"
                             : openCodeStatusQuery.data?.state === "starting"
                               ? "Starting"
@@ -628,11 +653,17 @@ function SettingsRouteView() {
                       </p>
                     </div>
                     <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      {openCodeStatusQuery.data?.healthy ? "healthy" : openCodeStatusQuery.isPending ? "checking" : "error"}
+                      {openCodeStatusQuery.data?.healthy
+                        ? "healthy"
+                        : openCodeStatusQuery.isPending
+                          ? "checking"
+                          : "error"}
                     </span>
                   </div>
                   {openCodeStatusQuery.data?.message ? (
-                    <p className="mt-2 text-xs text-muted-foreground">{openCodeStatusQuery.data.message}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {openCodeStatusQuery.data.message}
+                    </p>
                   ) : null}
                   {openCodeServerError ? (
                     <p className="mt-2 text-xs text-destructive">{openCodeServerError}</p>
@@ -660,8 +691,8 @@ function SettingsRouteView() {
                     spellCheck={false}
                   />
                   <span className="text-xs text-muted-foreground">
-                    Used for project/session discovery, session continuation, and native T3Code UI over
-                    OpenCode sessions.
+                    Used for project/session discovery, session continuation, and native T3Code UI
+                    over OpenCode sessions.
                   </span>
                 </label>
 
@@ -682,12 +713,15 @@ function SettingsRouteView() {
                   <Input
                     id="opencode-workspace"
                     value={settings.opencodeWorkspaceId}
-                    onChange={(event) => updateSettings({ opencodeWorkspaceId: event.target.value })}
+                    onChange={(event) =>
+                      updateSettings({ opencodeWorkspaceId: event.target.value })
+                    }
                     placeholder="Optional"
                     spellCheck={false}
                   />
                   <span className="text-xs text-muted-foreground">
-                    Use this when you want T3 Code to operate on a specific canonical OpenCode workspace.
+                    Use this when you want T3 Code to operate on a specific canonical OpenCode
+                    workspace.
                   </span>
                 </label>
 
@@ -716,12 +750,16 @@ function SettingsRouteView() {
                   </div>
                   <div className="space-y-3">
                     {(openCodeProvidersQuery.data?.all ?? []).map((provider) => {
-                      const isConnected = openCodeProvidersQuery.data?.connected.includes(provider.id) === true;
+                      const isConnected =
+                        openCodeProvidersQuery.data?.connected.includes(provider.id) === true;
                       const methods = openCodeProviderAuthMethodsQuery.data?.[provider.id] ?? [];
                       const pendingOauthMethod = providerPendingOauthMethodById[provider.id];
                       const authError = providerAuthErrorById[provider.id];
                       return (
-                        <div key={provider.id} className="rounded-lg border border-border/70 px-3 py-2">
+                        <div
+                          key={provider.id}
+                          className="rounded-lg border border-border/70 px-3 py-2"
+                        >
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
                               <p className="text-sm font-medium text-foreground">{provider.name}</p>
@@ -744,7 +782,9 @@ function SettingsRouteView() {
                                 type="button"
                                 size="xs"
                                 variant="outline"
-                                disabled={providerAuthPendingId === provider.id || methods.length === 0}
+                                disabled={
+                                  providerAuthPendingId === provider.id || methods.length === 0
+                                }
                                 onClick={() => {
                                   void connectOpenCodeProvider(provider.id);
                                 }}
@@ -812,107 +852,115 @@ function SettingsRouteView() {
                     </p>
                   </div>
                   <div className="space-y-3">
-                    {Object.entries(openCodeMcpServersQuery.data ?? {}).map(([serverName, status]) => {
-                      const needsAuth = status.status === "needs_auth";
-                      const isConnected = status.status === "connected";
-                      return (
-                        <div key={serverName} className="rounded-lg border border-border/70 px-3 py-2">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-medium text-foreground">{serverName}</p>
-                              <p className="text-xs text-muted-foreground">{status.status}</p>
+                    {Object.entries(openCodeMcpServersQuery.data ?? {}).map(
+                      ([serverName, status]) => {
+                        const needsAuth = status.status === "needs_auth";
+                        const isConnected = status.status === "connected";
+                        return (
+                          <div
+                            key={serverName}
+                            className="rounded-lg border border-border/70 px-3 py-2"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-foreground">{serverName}</p>
+                                <p className="text-xs text-muted-foreground">{status.status}</p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {needsAuth ? (
+                                  <>
+                                    <Button
+                                      type="button"
+                                      size="xs"
+                                      variant="outline"
+                                      disabled={mcpPendingName === serverName}
+                                      onClick={() => {
+                                        void authenticateOpenCodeMcp(serverName);
+                                      }}
+                                    >
+                                      Authenticate
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="xs"
+                                      variant="outline"
+                                      disabled={mcpPendingName === serverName}
+                                      onClick={() => {
+                                        void startOpenCodeMcpAuth(serverName);
+                                      }}
+                                    >
+                                      Start OAuth
+                                    </Button>
+                                  </>
+                                ) : null}
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant="outline"
+                                  disabled={mcpPendingName === serverName}
+                                  onClick={() => {
+                                    void toggleOpenCodeMcpConnection(serverName, isConnected);
+                                  }}
+                                >
+                                  {isConnected ? "Disconnect" : "Connect"}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant="outline"
+                                  disabled={mcpPendingName === serverName}
+                                  onClick={() => {
+                                    void removeOpenCodeMcpAuth(serverName);
+                                  }}
+                                >
+                                  Remove auth
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                              {needsAuth ? (
-                                <>
-                                  <Button
-                                    type="button"
-                                    size="xs"
-                                    variant="outline"
-                                    disabled={mcpPendingName === serverName}
-                                    onClick={() => {
-                                      void authenticateOpenCodeMcp(serverName);
-                                    }}
-                                  >
-                                    Authenticate
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="xs"
-                                    variant="outline"
-                                    disabled={mcpPendingName === serverName}
-                                    onClick={() => {
-                                      void startOpenCodeMcpAuth(serverName);
-                                    }}
-                                  >
-                                    Start OAuth
-                                  </Button>
-                                </>
-                              ) : null}
-                              <Button
-                                type="button"
-                                size="xs"
-                                variant="outline"
-                                disabled={mcpPendingName === serverName}
-                                onClick={() => {
-                                  void toggleOpenCodeMcpConnection(serverName, isConnected);
-                                }}
-                              >
-                                {isConnected ? "Disconnect" : "Connect"}
-                              </Button>
-                              <Button
-                                type="button"
-                                size="xs"
-                                variant="outline"
-                                disabled={mcpPendingName === serverName}
-                                onClick={() => {
-                                  void removeOpenCodeMcpAuth(serverName);
-                                }}
-                              >
-                                Remove auth
-                              </Button>
-                            </div>
+                            {needsAuth || mcpAuthStartUrlByName[serverName] ? (
+                              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                <Input
+                                  value={mcpAuthCodeByName[serverName] ?? ""}
+                                  onChange={(event) =>
+                                    setMcpAuthCodeByName((existing) => ({
+                                      ...existing,
+                                      [serverName]: event.target.value,
+                                    }))
+                                  }
+                                  placeholder="Authorization code"
+                                  spellCheck={false}
+                                />
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant="outline"
+                                  disabled={mcpPendingName === serverName}
+                                  onClick={() => {
+                                    void completeOpenCodeMcpAuth(serverName);
+                                  }}
+                                >
+                                  Finish OAuth
+                                </Button>
+                              </div>
+                            ) : null}
+                            {mcpAuthStartUrlByName[serverName] ? (
+                              <p className="mt-2 text-xs text-muted-foreground break-all">
+                                OAuth started: {mcpAuthStartUrlByName[serverName]}
+                              </p>
+                            ) : null}
+                            {status.status === "failed" ||
+                            status.status === "needs_client_registration" ? (
+                              <p className="mt-2 text-xs text-muted-foreground">{status.error}</p>
+                            ) : null}
+                            {mcpAuthErrorByName[serverName] ? (
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                {mcpAuthErrorByName[serverName]}
+                              </p>
+                            ) : null}
                           </div>
-                          {needsAuth || mcpAuthStartUrlByName[serverName] ? (
-                            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                              <Input
-                                value={mcpAuthCodeByName[serverName] ?? ""}
-                                onChange={(event) =>
-                                  setMcpAuthCodeByName((existing) => ({
-                                    ...existing,
-                                    [serverName]: event.target.value,
-                                  }))
-                                }
-                                placeholder="Authorization code"
-                                spellCheck={false}
-                              />
-                              <Button
-                                type="button"
-                                size="xs"
-                                variant="outline"
-                                disabled={mcpPendingName === serverName}
-                                onClick={() => {
-                                  void completeOpenCodeMcpAuth(serverName);
-                                }}
-                              >
-                                Finish OAuth
-                              </Button>
-                            </div>
-                          ) : null}
-                          {mcpAuthStartUrlByName[serverName] ? (
-                            <p className="mt-2 text-xs text-muted-foreground break-all">
-                              OAuth started: {mcpAuthStartUrlByName[serverName]}
-                            </p>
-                          ) : null}
-                          {status.status === "failed" || status.status === "needs_client_registration" ? (
-                            <p className="mt-2 text-xs text-muted-foreground">{status.error}</p>
-                          ) : null}
-                          {mcpAuthErrorByName[serverName] ? (
-                            <p className="mt-2 text-xs text-muted-foreground">{mcpAuthErrorByName[serverName]}</p>
-                          ) : null}
-                        </div>
-                      );
-                    })}
+                        );
+                      },
+                    )}
                   </div>
                 </div>
               </div>
@@ -955,14 +1003,17 @@ function SettingsRouteView() {
                   </span>
                 </label>
 
-                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <p>
-                    Binary source:{" "}
-                    <span className="font-medium text-foreground">{codexBinaryPath || "PATH"}</span>
-                  </p>
+                <div className="flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p>Binary source</p>
+                    <p className="mt-1 break-all font-mono text-[11px] text-foreground">
+                      {codexBinaryPath || "PATH"}
+                    </p>
+                  </div>
                   <Button
                     size="xs"
                     variant="outline"
+                    className="self-start"
                     onClick={() =>
                       updateSettings({
                         codexBinaryPath: defaults.codexBinaryPath,
@@ -1065,10 +1116,9 @@ function SettingsRouteView() {
                                 variant="outline"
                                 onClick={() =>
                                   updateSettings(
-                                    patchCustomModels(
-                                      provider,
-                                      [...getDefaultCustomModelsForProvider(defaults, provider)],
-                                    ),
+                                    patchCustomModels(provider, [
+                                      ...getDefaultCustomModelsForProvider(defaults, provider),
+                                    ]),
                                   )
                                 }
                               >
@@ -1230,6 +1280,24 @@ function SettingsRouteView() {
                   </Button>
                 </div>
               ) : null}
+            </section>
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-4">
+                <h2 className="text-sm font-medium text-foreground">About</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Application version and environment information.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Version</p>
+                  <p className="text-xs text-muted-foreground">
+                    Current version of the application.
+                  </p>
+                </div>
+                <code className="text-xs font-medium text-muted-foreground">{APP_VERSION}</code>
+              </div>
             </section>
           </div>
         </div>
