@@ -7278,7 +7278,11 @@ const OpenCodeModelPicker = memo(function OpenCodeModelPicker(props: {
           <ChevronDownIcon aria-hidden="true" className="size-3 opacity-60" />
         </span>
       </MenuTrigger>
-      <MenuPopup align="start" className="w-80 [--available-height:min(28rem,75vh)]">
+      <MenuPopup
+        align="start"
+        side={props.compact ? "top" : "bottom"}
+        className="w-80 [--available-height:min(28rem,75vh)]"
+      >
         <MenuRadioGroup
           value={props.selectedModel}
           onValueChange={(value) => {
