@@ -5204,10 +5204,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       )}
                     >
                       {/* Provider/model picker */}
-                      {isOpenCodeThread && !composerFooterCompact ? (
+                      {isOpenCodeThread ? (
                         <OpenCodeModelPicker
                           sections={openCodeModelSections}
                           selectedModel={selectedModelForPickerWithCustomFallback}
+                          compact={composerFooterCompact}
                           onModelChange={(model) => setComposerDraftModel(threadId, model)}
                         />
                       ) : !isOpenCodeThread ? (
@@ -5225,8 +5226,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       {composerFooterCompact ? (
                         <CompactComposerControlsMenu
                           activePlan={Boolean(activePlan || activeProposedPlan || planSidebarOpen)}
-                          openCodeModelSections={isOpenCodeThread ? openCodeModelSections : []}
-                          openCodeSelectedModel={selectedModelForPickerWithCustomFallback}
+                          showCodexReasoningControls={!isOpenCodeThread}
                           openCodeAgents={
                             isOpenCodeThread ? openCodeState.agentCatalog.visible : []
                           }
@@ -5240,7 +5240,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
                           reasoningOptions={reasoningOptions}
                           onEffortSelect={onEffortSelect}
                           onCodexFastModeChange={onCodexFastModeChange}
-                          onOpenCodeModelChange={(model) => setComposerDraftModel(threadId, model)}
                           onOpenCodeAgentChange={handleOpenCodeAgentChange}
                           onToggleInteractionMode={toggleInteractionMode}
                           onTogglePlanSidebar={togglePlanSidebar}
@@ -7238,6 +7237,7 @@ const OpenCodeModelPicker = memo(function OpenCodeModelPicker(props: {
     models: ReadonlyArray<{ slug: string; name: string }>;
   }>;
   selectedModel: string;
+  compact?: boolean;
   disabled?: boolean;
   onModelChange: (model: string) => void;
 }) {
@@ -7264,12 +7264,15 @@ const OpenCodeModelPicker = memo(function OpenCodeModelPicker(props: {
           <Button
             size="sm"
             variant="ghost"
-            className="min-w-0 shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+            className={cn(
+              "min-w-0 shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80",
+              props.compact ? "max-w-40" : "sm:px-3",
+            )}
             disabled={props.disabled}
           />
         }
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className={cn("flex min-w-0 items-center gap-2", props.compact ? "max-w-36" : undefined)}>
           <OpenCodeIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground/70" />
           <span className="truncate">{selectedEntry?.name ?? props.selectedModel}</span>
           <ChevronDownIcon aria-hidden="true" className="size-3 opacity-60" />
@@ -7751,12 +7754,7 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
 const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   activePlan: boolean;
-  openCodeModelSections: ReadonlyArray<{
-    providerId: string;
-    providerName: string;
-    models: ReadonlyArray<{ slug: string; name: string }>;
-  }>;
-  openCodeSelectedModel: string;
+  showCodexReasoningControls: boolean;
   openCodeAgents: ReadonlyArray<OpenCodeAgent>;
   openCodeSelectedAgent: string | null;
   interactionMode: ProviderInteractionMode;
@@ -7768,7 +7766,6 @@ const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(pr
   reasoningOptions: ReadonlyArray<CodexReasoningEffort>;
   onEffortSelect: (effort: CodexReasoningEffort) => void;
   onCodexFastModeChange: (enabled: boolean) => void;
-  onOpenCodeModelChange: (model: string) => void;
   onOpenCodeAgentChange: (agent: string) => void;
   onToggleInteractionMode: () => void;
   onTogglePlanSidebar: () => void;
@@ -7797,7 +7794,7 @@ const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(pr
         <EllipsisIcon aria-hidden="true" className="size-4" />
       </MenuTrigger>
       <MenuPopup align="start">
-        {props.selectedProvider === "codex" && props.selectedEffort != null ? (
+        {props.showCodexReasoningControls && props.selectedProvider === "codex" && props.selectedEffort != null ? (
           <>
             <MenuGroup>
               <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Reasoning</div>
@@ -7830,33 +7827,6 @@ const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(pr
                 <MenuRadioItem value="off">off</MenuRadioItem>
                 <MenuRadioItem value="on">on</MenuRadioItem>
               </MenuRadioGroup>
-            </MenuGroup>
-            <MenuDivider />
-          </>
-        ) : null}
-        {props.openCodeModelSections.length > 0 ? (
-          <>
-            <MenuGroup>
-              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Model</div>
-              {props.openCodeModelSections.map((section, sectionIndex) => (
-                <MenuGroup key={section.providerId}>
-                  {sectionIndex > 0 ? <MenuDivider /> : null}
-                  <MenuGroupLabel>{section.providerName}</MenuGroupLabel>
-                  <MenuRadioGroup
-                    value={props.openCodeSelectedModel}
-                    onValueChange={(value) => {
-                      if (!value || value === props.openCodeSelectedModel) return;
-                      props.onOpenCodeModelChange(value);
-                    }}
-                  >
-                    {section.models.map((model) => (
-                      <MenuRadioItem key={`${section.providerId}:${model.slug}`} value={model.slug}>
-                        {model.name}
-                      </MenuRadioItem>
-                    ))}
-                  </MenuRadioGroup>
-                </MenuGroup>
-              ))}
             </MenuGroup>
             <MenuDivider />
           </>
