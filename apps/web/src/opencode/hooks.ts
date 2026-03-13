@@ -247,6 +247,8 @@ export function useOpenCodeThreadSource(threadId?: ThreadId) {
     statusQuery,
     agentCatalog,
     providerCatalog: providersQuery.data ?? null,
+    providerCatalogStatus: providersQuery.status,
+    providerCatalogError: providersQuery.error instanceof Error ? providersQuery.error.message : null,
     commands: commandsQuery.data ?? [],
     resources: resourcesQuery.data ?? {},
     pendingPermissions: permissionsQuery.data ?? [],

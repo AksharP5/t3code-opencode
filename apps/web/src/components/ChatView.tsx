@@ -5209,6 +5209,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
                           sections={openCodeModelSections}
                           selectedModel={selectedModelForPickerWithCustomFallback}
                           compact={composerFooterCompact}
+                          loading={openCodeState.providerCatalogStatus === "pending"}
+                          error={openCodeState.providerCatalogError}
                           onModelChange={(model) => setComposerDraftModel(threadId, model)}
                         />
                       ) : !isOpenCodeThread ? (
@@ -7239,6 +7241,8 @@ const OpenCodeModelPicker = memo(function OpenCodeModelPicker(props: {
   selectedModel: string;
   compact?: boolean;
   disabled?: boolean;
+  loading?: boolean;
+  error?: string | null;
   onModelChange: (model: string) => void;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -7283,28 +7287,36 @@ const OpenCodeModelPicker = memo(function OpenCodeModelPicker(props: {
         side={props.compact ? "top" : "bottom"}
         className="w-80 [--available-height:min(28rem,75vh)]"
       >
-        <MenuRadioGroup
-          value={props.selectedModel}
-          onValueChange={(value) => {
-            if (!value || props.disabled) {
-              return;
-            }
-            props.onModelChange(value);
-            setIsMenuOpen(false);
-          }}
-        >
-          {props.sections.map((section, sectionIndex) => (
-            <MenuGroup key={section.providerId}>
-              {sectionIndex > 0 ? <MenuDivider /> : null}
-              <MenuGroupLabel>{section.providerName}</MenuGroupLabel>
-              {section.models.map((model) => (
-                <MenuRadioItem key={`${section.providerId}:${model.slug}`} value={model.slug}>
-                  <span className="truncate">{model.name}</span>
-                </MenuRadioItem>
-              ))}
-            </MenuGroup>
-          ))}
-        </MenuRadioGroup>
+        {props.sections.length === 0 ? (
+          <div className="px-3 py-2 text-xs text-muted-foreground">
+            {props.loading
+              ? "Loading OpenCode models..."
+              : props.error ?? "No OpenCode models are available yet."}
+          </div>
+        ) : (
+          <MenuRadioGroup
+            value={props.selectedModel}
+            onValueChange={(value) => {
+              if (!value || props.disabled) {
+                return;
+              }
+              props.onModelChange(value);
+              setIsMenuOpen(false);
+            }}
+          >
+            {props.sections.map((section, sectionIndex) => (
+              <MenuGroup key={section.providerId}>
+                {sectionIndex > 0 ? <MenuDivider /> : null}
+                <MenuGroupLabel>{section.providerName}</MenuGroupLabel>
+                {section.models.map((model) => (
+                  <MenuRadioItem key={`${section.providerId}:${model.slug}`} value={model.slug}>
+                    <span className="truncate">{model.name}</span>
+                  </MenuRadioItem>
+                ))}
+              </MenuGroup>
+            ))}
+          </MenuRadioGroup>
+        )}
       </MenuPopup>
     </Menu>
   );
