@@ -57,7 +57,7 @@ const OpenCodeProviderInterleavedCapability = Schema.Union([
 ]);
 
 const OpenCodeProviderModelCapabilities = Schema.Struct({
-  temperature: Schema.Boolean,
+  temperature: Schema.optional(Schema.Boolean),
   reasoning: Schema.Boolean,
   attachment: Schema.Boolean,
   toolcall: Schema.Boolean,
