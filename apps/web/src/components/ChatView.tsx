@@ -5204,13 +5204,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       )}
                     >
                       {/* Provider/model picker */}
-                      {isOpenCodeThread ? (
+                      {isOpenCodeThread && !composerFooterCompact ? (
                         <OpenCodeModelPicker
                           sections={openCodeModelSections}
                           selectedModel={selectedModelForPickerWithCustomFallback}
                           onModelChange={(model) => setComposerDraftModel(threadId, model)}
                         />
-                      ) : (
+                      ) : !isOpenCodeThread ? (
                         <ProviderModelPicker
                           compact={composerFooterCompact}
                           provider={selectedProvider}
@@ -5220,11 +5220,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
                           disabled={false}
                           onProviderModelChange={onProviderModelSelect}
                         />
-                      )}
+                      ) : null}
 
                       {composerFooterCompact ? (
                         <CompactComposerControlsMenu
                           activePlan={Boolean(activePlan || activeProposedPlan || planSidebarOpen)}
+                          openCodeModelSections={isOpenCodeThread ? openCodeModelSections : []}
+                          openCodeSelectedModel={selectedModelForPickerWithCustomFallback}
                           openCodeAgents={
                             isOpenCodeThread ? openCodeState.agentCatalog.visible : []
                           }
@@ -5238,6 +5240,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                           reasoningOptions={reasoningOptions}
                           onEffortSelect={onEffortSelect}
                           onCodexFastModeChange={onCodexFastModeChange}
+                          onOpenCodeModelChange={(model) => setComposerDraftModel(threadId, model)}
                           onOpenCodeAgentChange={handleOpenCodeAgentChange}
                           onToggleInteractionMode={toggleInteractionMode}
                           onTogglePlanSidebar={togglePlanSidebar}
@@ -7748,6 +7751,12 @@ const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
 const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   activePlan: boolean;
+  openCodeModelSections: ReadonlyArray<{
+    providerId: string;
+    providerName: string;
+    models: ReadonlyArray<{ slug: string; name: string }>;
+  }>;
+  openCodeSelectedModel: string;
   openCodeAgents: ReadonlyArray<OpenCodeAgent>;
   openCodeSelectedAgent: string | null;
   interactionMode: ProviderInteractionMode;
@@ -7759,6 +7768,7 @@ const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(pr
   reasoningOptions: ReadonlyArray<CodexReasoningEffort>;
   onEffortSelect: (effort: CodexReasoningEffort) => void;
   onCodexFastModeChange: (enabled: boolean) => void;
+  onOpenCodeModelChange: (model: string) => void;
   onOpenCodeAgentChange: (agent: string) => void;
   onToggleInteractionMode: () => void;
   onTogglePlanSidebar: () => void;
@@ -7820,6 +7830,33 @@ const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(pr
                 <MenuRadioItem value="off">off</MenuRadioItem>
                 <MenuRadioItem value="on">on</MenuRadioItem>
               </MenuRadioGroup>
+            </MenuGroup>
+            <MenuDivider />
+          </>
+        ) : null}
+        {props.openCodeModelSections.length > 0 ? (
+          <>
+            <MenuGroup>
+              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Model</div>
+              {props.openCodeModelSections.map((section, sectionIndex) => (
+                <MenuGroup key={section.providerId}>
+                  {sectionIndex > 0 ? <MenuDivider /> : null}
+                  <MenuGroupLabel>{section.providerName}</MenuGroupLabel>
+                  <MenuRadioGroup
+                    value={props.openCodeSelectedModel}
+                    onValueChange={(value) => {
+                      if (!value || value === props.openCodeSelectedModel) return;
+                      props.onOpenCodeModelChange(value);
+                    }}
+                  >
+                    {section.models.map((model) => (
+                      <MenuRadioItem key={`${section.providerId}:${model.slug}`} value={model.slug}>
+                        {model.name}
+                      </MenuRadioItem>
+                    ))}
+                  </MenuRadioGroup>
+                </MenuGroup>
+              ))}
             </MenuGroup>
             <MenuDivider />
           </>
