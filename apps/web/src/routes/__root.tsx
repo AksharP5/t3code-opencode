@@ -10,18 +10,17 @@ import { useEffect, useRef } from "react";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Throttler } from "@tanstack/react-pacer";
 
-import { useAppSettings } from "../appSettings";
 import { APP_DISPLAY_NAME } from "../branding";
 import { Button } from "../components/ui/button";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "../components/ui/toast";
 import { useOpenCodeEventActivityStore } from "../opencode/eventActivityStore";
 import { applyOpenCodeEventToQueryCache } from "../opencode/eventProjection";
+import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
 import { clearPromotedDraftThreads, useComposerDraftStore } from "../composerDraftStore";
 import { useStore } from "../store";
 import { useTerminalStateStore } from "../terminalStateStore";
-import { preferredTerminalEditor } from "../terminal-links";
 import { terminalRunningSubprocessFromEvent } from "../terminalActivity";
 import { onServerConfigUpdated, onServerWelcome } from "../wsNativeApi";
 import { providerQueryKeys } from "../lib/providerReactQuery";
@@ -134,7 +133,6 @@ function errorDetails(error: unknown): string {
 }
 
 function EventRouter() {
-  const { settings } = useAppSettings();
   const syncServerReadModel = useStore((store) => store.syncServerReadModel);
   const setProjectExpanded = useStore((store) => store.setProjectExpanded);
   const removeOrphanedTerminalStates = useTerminalStateStore(
@@ -289,9 +287,13 @@ function EventRouter() {
           onClick: () => {
             void queryClient
               .ensureQueryData(serverConfigQueryOptions())
-              .then((config) =>
-                api.shell.openInEditor(config.keybindingsConfigPath, preferredTerminalEditor()),
-              )
+              .then((config) => {
+                const editor = resolveAndPersistPreferredEditor(config.availableEditors);
+                if (!editor) {
+                  throw new Error("No available editors found.");
+                }
+                return api.shell.openInEditor(config.keybindingsConfigPath, editor);
+              })
               .catch((error) => {
                 toastManager.add({
                   type: "error",
@@ -320,9 +322,6 @@ function EventRouter() {
     queryClient,
     removeOrphanedTerminalStates,
     setProjectExpanded,
-    settings.opencodeAutoStart,
-    settings.opencodePassword,
-    settings.opencodeServerUrl,
     syncServerReadModel,
   ]);
 

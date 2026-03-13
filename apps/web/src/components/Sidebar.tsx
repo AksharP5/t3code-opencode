@@ -12,22 +12,39 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
+  DndContext,
+  type DragCancelEvent,
+  type CollisionDetection,
+  PointerSensor,
+  type DragStartEvent,
+  closestCorners,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  DEFAULT_MODEL_BY_PROVIDER,
   type DesktopUpdateState,
   ProjectId,
   ThreadId,
   type GitStatusResult,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { buildOpenCodeServerConfigInput, useAppSettings } from "../appSettings";
 import { isElectron } from "../env";
 import { APP_STAGE_LABEL, APP_VERSION } from "../branding";
-import { isMacPlatform, newThreadId } from "../lib/utils";
+import { isMacPlatform, newCommandId, newProjectId, newThreadId } from "../lib/utils";
 import { isChatNewLocalShortcut, isChatNewShortcut, shortcutLabelForCommand } from "../keybindings";
 import { type Thread } from "../types";
+import { useStore } from "../store";
 import { derivePendingApprovals, derivePendingUserInputs } from "../session-logic";
-import { gitStatusQueryOptions } from "../lib/gitReactQuery";
+import { gitRemoveWorktreeMutationOptions, gitStatusQueryOptions } from "../lib/gitReactQuery";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
 import { useOpenCodeThreadSource } from "../opencode/hooks";
@@ -66,7 +83,13 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "./ui/sidebar";
-import { resolveThreadStatusPill, shouldClearThreadSelectionOnMouseDown } from "./Sidebar.logic";
+import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
+import { isNonEmpty as isNonEmptyString } from "effect/String";
+import {
+  resolveThreadRowClassName,
+  resolveThreadStatusPill,
+  shouldClearThreadSelectionOnMouseDown,
+} from "./Sidebar.logic";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_PREVIEW_LIMIT = 6;
@@ -276,7 +299,23 @@ function ProjectFavicon({ cwd }: { cwd: string }) {
 }
 
 export default function Sidebar() {
+  const projects = useStore((store) => store.projects);
+  const threads = useStore((store) => store.threads);
+  const markThreadUnread = useStore((store) => store.markThreadUnread);
+  const toggleProject = useStore((store) => store.toggleProject);
+  const reorderProjects = useStore((store) => store.reorderProjects);
+  const clearComposerDraftForThread = useComposerDraftStore((store) => store.clearThreadDraft);
+  const getDraftThreadByProjectId = useComposerDraftStore(
+    (store) => store.getDraftThreadByProjectId,
+  );
   const terminalStateByThreadId = useTerminalStateStore((state) => state.terminalStateByThreadId);
+  const clearTerminalState = useTerminalStateStore((state) => state.clearTerminalState);
+  const clearProjectDraftThreadId = useComposerDraftStore(
+    (store) => store.clearProjectDraftThreadId,
+  );
+  const clearProjectDraftThreadById = useComposerDraftStore(
+    (store) => store.clearProjectDraftThreadById,
+  );
   const navigate = useNavigate();
   const isOnSettings = useLocation({ select: (loc) => loc.pathname === "/settings" });
   const { settings: appSettings } = useAppSettings();
@@ -291,10 +330,8 @@ export default function Sidebar() {
   const openCodeState = useOpenCodeThreadSource(routeThreadId ?? undefined);
   const openCodeConfig = useMemo(() => buildOpenCodeServerConfigInput(appSettings), [appSettings]);
   const queryClient = useQueryClient();
-  const getDraftThreadByProjectId = useComposerDraftStore(
-    (store) => store.getDraftThreadByProjectId,
-  );
   const setProjectDraftThreadId = useComposerDraftStore((store) => store.setProjectDraftThreadId);
+  const removeWorktreeMutation = useMutation(gitRemoveWorktreeMutationOptions({ queryClient }));
   const [addingProject, setAddingProject] = useState(false);
   const [newCwd, setNewCwd] = useState("");
   const [isPickingFolder, setIsPickingFolder] = useState(false);
@@ -470,7 +507,6 @@ export default function Sidebar() {
     },
     [getDraftThreadByProjectId, navigate, setProjectDraftThreadId, visibleProjects],
   );
-
   const focusMostRecentThreadForProject = useCallback(
     (projectId: ProjectId) => {
       const draftThread = getDraftThreadByProjectId(projectId);
@@ -913,10 +949,58 @@ export default function Sidebar() {
 
   const handleProjectContextMenu = useCallback(
     async (projectId: ProjectId, position: { x: number; y: number }) => {
-      void projectId;
-      void position;
+      const api = readNativeApi();
+      if (!api) return;
+      const clicked = await api.contextMenu.show(
+        [{ id: "delete", label: "Remove project", destructive: true }],
+        position,
+      );
+      if (clicked !== "delete") return;
+
+      const project = projects.find((entry) => entry.id === projectId);
+      if (!project) return;
+
+      const projectThreads = threads.filter((thread) => thread.projectId === projectId);
+      if (projectThreads.length > 0) {
+        toastManager.add({
+          type: "warning",
+          title: "Project is not empty",
+          description: "Delete all threads in this project before removing it.",
+        });
+        return;
+      }
+
+      const confirmed = await api.dialogs.confirm(`Remove project "${project.name}"?`);
+      if (!confirmed) return;
+
+      try {
+        const projectDraftThread = getDraftThreadByProjectId(projectId);
+        if (projectDraftThread) {
+          clearComposerDraftForThread(projectDraftThread.threadId);
+        }
+        clearProjectDraftThreadId(projectId);
+        await api.orchestration.dispatchCommand({
+          type: "project.delete",
+          commandId: newCommandId(),
+          projectId,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error removing project.";
+        console.error("Failed to remove project", { projectId, error });
+        toastManager.add({
+          type: "error",
+          title: `Failed to remove "${project.name}"`,
+          description: message,
+        });
+      }
     },
-    [],
+    [
+      clearComposerDraftForThread,
+      clearProjectDraftThreadId,
+      getDraftThreadByProjectId,
+      projects,
+      threads,
+    ],
   );
 
   useEffect(() => {
@@ -956,7 +1040,6 @@ export default function Sidebar() {
       event.preventDefault();
       void handleNewThread(projectId);
     };
-
     const onMouseDown = (event: globalThis.MouseEvent) => {
       if (selectedThreadIds.size === 0) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
@@ -1129,7 +1212,7 @@ export default function Sidebar() {
       <Tooltip>
         <TooltipTrigger
           render={
-            <div className="flex min-w-0 flex-1 items-center gap-1 mt-1.5 ml-1 cursor-pointer">
+            <div className="flex min-w-0 flex-1 items-center gap-1 ml-1 cursor-pointer">
               <T3Wordmark />
               <span className="truncate text-sm font-medium tracking-tight text-muted-foreground">
                 Code

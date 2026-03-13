@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildOpenCodeServerConfigInput,
+  DEFAULT_TIMESTAMP_FORMAT,
   getAppModelOptions,
-  getSlashModelOptions,
   normalizeCustomModelSlugs,
   resolveAppModelSelection,
 } from "./appSettings";
@@ -60,17 +60,9 @@ describe("resolveAppModelSelection", () => {
   });
 });
 
-describe("getSlashModelOptions", () => {
-  it("includes saved custom model slugs for /model command suggestions", () => {
-    const options = getSlashModelOptions("codex", ["custom/internal-model"], "", "gpt-5.3-codex");
-
-    expect(options.some((option) => option.slug === "custom/internal-model")).toBe(true);
-  });
-
-  it("filters slash-model suggestions across built-in and custom model names", () => {
-    const options = getSlashModelOptions("codex", ["openai/gpt-oss-120b"], "oss", "gpt-5.3-codex");
-
-    expect(options.map((option) => option.slug)).toEqual(["openai/gpt-oss-120b"]);
+describe("timestamp format defaults", () => {
+  it("defaults timestamp format to locale", () => {
+    expect(DEFAULT_TIMESTAMP_FORMAT).toBe("locale");
   });
 });
 
@@ -82,6 +74,7 @@ describe("buildOpenCodeServerConfigInput", () => {
         codexHomePath: "",
         confirmThreadDelete: true,
         enableAssistantStreaming: false,
+        timestampFormat: DEFAULT_TIMESTAMP_FORMAT,
         customCodexModels: [],
         opencodeServerUrl: " http://127.0.0.1:4096 ",
         opencodeAutoStart: true,
@@ -101,6 +94,7 @@ describe("buildOpenCodeServerConfigInput", () => {
         codexHomePath: "",
         confirmThreadDelete: true,
         enableAssistantStreaming: false,
+        timestampFormat: DEFAULT_TIMESTAMP_FORMAT,
         customCodexModels: [],
         opencodeServerUrl: "http://127.0.0.1:4096",
         opencodeAutoStart: false,
